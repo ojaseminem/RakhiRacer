@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Rakhi: The Grand Family Race</title>
+<meta name="description" content="One race. One Rakhi. One very angry Mom.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Titan+One&family=Chakra+Petch:wght@400;500;600;700&family=Bungee&family=Sora:wght@300;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./src/ui/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>&#127937;</text></svg>">
+</head>
+<body>
+
+<canvas id="stage"></canvas>
+
+<!-- cinematic letterbox bars, driven from the camera director -->
+<div id="bar-top" class="bar"></div>
+<div id="bar-bottom" class="bar"></div>
+
+<!-- full screen colour flash used for impacts, rewinds and act transitions -->
+<div id="flash"></div>
+<div id="vignette"></div>
+
+<!-- ============ BOOT ============ -->
+<section id="boot" class="screen active">
+  <div class="boot-inner">
+    <div class="boot-mark">
+      <span class="boot-thread"></span>
+      <span class="boot-knot"></span>
+      <span class="boot-thread"></span>
+    </div>
+    <h1 class="boot-title">RAKHI</h1>
+    <p class="boot-sub">THE GRAND FAMILY RACE</p>
+    <div class="boot-barwrap"><div id="boot-bar"></div></div>
+    <p id="boot-status" class="boot-status">building the world</p>
+    <button id="boot-start" class="btn btn-primary hidden">PRESS TO START</button>
+  </div>
+</section>
+
+<!-- ============ TITLE ============ -->
+<section id="title" class="screen">
+  <div class="title-grid">
+    <div class="title-block">
+      <p class="kicker">ONE RACE &nbsp;&#183;&nbsp; ONE RAKHI &nbsp;&#183;&nbsp; ONE VERY ANGRY MOM</p>
+      <h1 class="big-title">RAKHI</h1>
+      <h2 class="big-sub">THE GRAND FAMILY RACE</h2>
+      <div class="title-actions">
+        <button id="go-race" class="btn btn-primary">START THE RACE</button>
+        <button id="go-time" class="btn btn-ghost locked" disabled>TIME ATTACK <span class="lockmsg">finish once to unlock</span></button>
+        <button id="go-rush" class="btn btn-ghost locked" disabled>MOM RUSH <span class="lockmsg">earn an S rank to unlock</span></button>
+      </div>
+      <p class="title-help">DRIVE <b>&#8592; &#8594;</b> or <b>A D</b> &nbsp;&#183;&nbsp; BOOST <b>SHIFT</b> &nbsp;&#183;&nbsp; ABILITY <b>SPACE</b> &nbsp;&#183;&nbsp; ITEM <b>E</b> &nbsp;&#183;&nbsp; SKIP <b>ESC</b></p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ VEHICLE SELECT ============ -->
+<section id="select" class="screen">
+  <div class="sel-head">
+    <p class="kicker">CHOOSE YOUR RIDE</p>
+    <h2 class="sel-title">HOW DO YOU WANT TO WIN?</h2>
+  </div>
+  <div class="sel-rack" id="sel-rack"></div>
+  <div class="sel-foot">
+    <p class="sel-hint"><b>&#8592; &#8594;</b> to browse &nbsp;&#183;&nbsp; <b>ENTER</b> to lock in</p>
+    <button id="sel-confirm" class="btn btn-primary">LOCK IT IN</button>
+  </div>
+</section>
+
+<!-- ============ IN RACE HUD ============ -->
+<section id="hud" class="screen hud">
+  <div class="hud-tl">
+    <div class="sector-chip"><span id="sector-num">1</span><span id="sector-name">THE FAMILY CITY</span></div>
+    <div class="pos-chip"><span id="pos-num">12</span><span class="pos-of">/ <span id="pos-tot">13</span></span></div>
+  </div>
+
+  <div class="hud-tr">
+    <div class="timer" id="timer">0:00.00</div>
+    <div class="progressline"><div id="progressfill"></div><div id="progressdot"></div></div>
+  </div>
+
+  <div class="hud-br">
+    <div class="speedo">
+      <svg viewBox="0 0 200 200" class="speedo-svg">
+        <circle class="sp-track" cx="100" cy="100" r="82"/>
+        <circle class="sp-fill" id="sp-fill" cx="100" cy="100" r="82"/>
+      </svg>
+      <div class="sp-read"><span id="speed-num">0</span><span class="sp-unit">KM/H</span></div>
+    </div>
+    <div class="boostwrap">
+      <div class="boostbar"><div id="boostfill"></div></div>
+      <span class="boostlabel" id="boostlabel">BOOST</span>
+    </div>
+  </div>
+
+  <div class="hud-bl">
+    <div class="itemslot" id="itemslot">
+      <div class="itemslot-inner">
+        <div class="item-icon" id="item-icon"></div>
+        <div class="item-name" id="item-name">NO ITEM</div>
+      </div>
+      <div class="itemslot-key">E</div>
+    </div>
+    <div class="ability" id="ability">
+      <div class="ability-ring"><div id="ability-fill"></div></div>
+      <div class="ability-txt"><b id="ability-name">NITRO BURST</b><span>SPACE</span></div>
+    </div>
+  </div>
+
+  <div class="hud-lap" id="lapbanner"></div>
+  <div class="hud-bark-layer" id="barklayer"></div>
+  <div class="hud-name-layer" id="namelayer"></div>
+</section>
+
+<!-- ============ CINEMATIC CAPTIONS / TITLE CARDS ============ -->
+<div id="cardlayer">
+  <div id="card" class="card">
+    <div class="card-rule"></div>
+    <h3 id="card-title">CHACHU</h3>
+    <p id="card-sub">eliminated</p>
+    <div class="card-rule"></div>
+  </div>
+  <div id="chapter" class="chapter">
+    <p id="chapter-kicker">SECTOR 2</p>
+    <h2 id="chapter-title">THE IMPOSSIBLE HIGHWAY</h2>
+  </div>
+  <div id="shout" class="shout"></div>
+  <div id="subtitle" class="subtitle"></div>
+</div>
+
+<!-- ============ RESULTS ============ -->
+<section id="results" class="screen">
+  <div class="res-inner">
+    <div class="res-rankwrap"><div id="res-rank" class="res-rank">S</div></div>
+    <h2 class="res-title">CHAMPION</h2>
+    <div class="res-stats">
+      <div><span>TIME</span><b id="res-time">0:00.00</b></div>
+      <div><span>RELATIVES PUNTED</span><b id="res-punt">0</b></div>
+      <div><span>TOP SPEED</span><b id="res-top">0</b></div>
+      <div><span>CLEAN DRIVING</span><b id="res-clean">0%</b></div>
+    </div>
+    <div id="res-unlock" class="res-unlock hidden"></div>
+    <div class="res-actions">
+      <button id="res-gift" class="btn btn-primary">SEE THE RAKHI</button>
+      <button id="res-again" class="btn btn-ghost">RACE AGAIN</button>
+      <button id="res-menu" class="btn btn-ghost">MAIN MENU</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ THE RAKHI (swappable ending) ============ -->
+<section id="gift" class="screen">
+  <div id="gift-slot"></div>
+</section>
+
+<div id="skiphint" class="skiphint">ESC to skip</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.js",
+    "three/addons/": "./vendor/jsm/"
+  }
+}
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
