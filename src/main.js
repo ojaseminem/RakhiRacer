@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { SECTORS, VEHICLES, sectorAt } from './config.js';
 import { Track, buildRoadMesh } from './world/track.js';
-import { makeToon, makeSky, blendSector } from './art/materials.js';
+import { makeToon, makeSky, blendSector, syncLighting } from './art/materials.js';
 import { HERO_BUILDERS } from './art/build.js';
+import { loadDropInModels, anyModelsLoaded } from './art/assets.js';
 import { VFX, makeSpeedLines } from './art/vfx.js';
 import { Director } from './core/director.js';
 import { Input } from './core/input.js';
@@ -30,7 +31,7 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0;
+renderer.toneMappingExposure = 0.96;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
@@ -40,33 +41,55 @@ scene.fog = new THREE.Fog(0xbfe9ff, 900, 6200);
 const sky = makeSky();
 scene.add(sky);
 
-const sun = new THREE.DirectionalLight(0xfff2d0, 1.55);
+// A three light rig. The key throws the shadows and sets the colour of light,
+// the hemisphere fills from sky above and ground below, and the rim sits behind
+// the action to cut every silhouette away from the background. One flat
+// directional plus one ambient, which is what this had before, is exactly what
+// makes a scene look like untextured geometry.
+const sun = new THREE.DirectionalLight(0xfff0cc, 1.42);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.camera.near = 10;
-sun.shadow.camera.far = 800;
-const SH = 150;
+sun.shadow.camera.near = 8;
+sun.shadow.camera.far = 620;
+const SH = 110;
 sun.shadow.camera.left = -SH; sun.shadow.camera.right = SH;
 sun.shadow.camera.top = SH; sun.shadow.camera.bottom = -SH;
-sun.shadow.bias = -0.0011;
-sun.shadow.normalBias = 0.7;
+sun.shadow.bias = -0.0008;
+sun.shadow.normalBias = 0.45;
+sun.shadow.radius = 3;
 scene.add(sun, sun.target);
 
-const ambient = new THREE.HemisphereLight(0x8fb6ff, 0x3a2a55, 0.62);
+const ambient = new THREE.HemisphereLight(0x9fd0ff, 0x6b4f9e, 0.48);
 scene.add(ambient);
-const env = { sky, fog: scene.fog, sun, ambient };
+
+const rim = new THREE.DirectionalLight(0xfff0c0, 0.42);
+rim.castShadow = false;
+scene.add(rim, rim.target);
+
+const env = { sky, fog: scene.fog, sun, ambient, rim };
+const _sunDir = new THREE.Vector3();
 
 // ---------------------------------------------------------------------------
 // World
 // ---------------------------------------------------------------------------
+// Any .glb dropped into assets/models/ replaces the built in version of that
+// vehicle. Nothing there is the normal case, and the game does not care.
+setStatus('looking for models');
+const foundModels = await loadDropInModels('./assets/models/');
+if (foundModels) console.info(`[rakhi] using ${foundModels} drop-in model(s)`);
+
 setStatus('shaping the rakhi');
 const track = new Track();
 
 setStatus('paving thirty kilometres');
-const road = new THREE.Mesh(buildRoadMesh(track), makeToon({
-  vertexColors: true, rim: 0xffffff, rimStrength: 0.20, rimPower: 3.8,
-  bounce: 0x2a1a3a, bounceStrength: 0.18
-}));
+const roadMat = makeToon({
+  vertexColors: true, rim: 0xffffff, rimStrength: 0.16, rimPower: 4.4,
+  bounce: 0x2a1a3a, bounceStrength: 0.14, noise: 0.09, noiseScale: 0.45
+});
+// the road is the largest upward facing surface in the game, so the sky term
+// has to be dialled right back or the whole thing washes out to pale blue
+roadMat.userData.skyScale = 0.18;
+const road = new THREE.Mesh(buildRoadMesh(track), roadMat);
 road.receiveShadow = true;
 scene.add(road);
 
@@ -94,7 +117,7 @@ const podium = new THREE.Group();
 scene.add(podium);
 const podiumModels = VEHICLES.map((v, i) => {
   const m = HERO_BUILDERS[v.id](v);
-  m.position.x = (i - 1) * 14;
+  m.position.x = (i - 1) * 34;   // far enough apart that neighbours stay out of frame
   podium.add(m);
   return m;
 });
@@ -280,10 +303,10 @@ hud.buildSelect(VEHICLES, (id) => {
 hud.onSelectChange = (v, i) => { selIndex = i; audio.init(); audio.beep(false); };
 
 $('boot-start').onclick = () => { audio.init(); audio.resume(); setScreen('title'); };
-$('go-race').onclick = () => { pendingMode = 'story'; podium.visible = true; setScreen('select'); };
-$('go-time').onclick = () => { pendingMode = 'time'; podium.visible = true; setScreen('select'); };
-$('go-rush').onclick = () => { pendingMode = 'boss'; podium.visible = true; setScreen('select'); };
-$('res-again').onclick = () => { restoreWorld(); podium.visible = true; setScreen('select'); };
+$('go-race').onclick = () => { pendingMode = 'story'; podium.visible = true; setScreen('select'); snapMenuCamera(); };
+$('go-time').onclick = () => { pendingMode = 'time'; podium.visible = true; setScreen('select'); snapMenuCamera(); };
+$('go-rush').onclick = () => { pendingMode = 'boss'; podium.visible = true; setScreen('select'); snapMenuCamera(); };
+$('res-again').onclick = () => { restoreWorld(); podium.visible = true; setScreen('select'); snapMenuCamera(); };
 $('res-menu').onclick = () => { restoreWorld(); podium.visible = false; setScreen('title'); };
 const resGift = $('res-gift');
 if (resGift) resGift.onclick = playEnding;
@@ -309,17 +332,40 @@ const fakePlayer = {
   worldPos: (o) => track.posAt(0.004, 0, 1, o || new THREE.Vector3())
 };
 
+function selectCameraTarget(outPos, outLook) {
+  const target = podiumModels[selIndex];
+  target.updateWorldMatrix(true, false);
+  const c = target.getWorldPosition(new THREE.Vector3());
+  c.y += 1.6;
+  // the cards cover the bottom half of this screen, so the ride has to sit
+  // high in frame. aiming below it is what lifts it up there.
+  const r = 21;
+  outPos.set(c.x + Math.cos(menuCam.a) * r, c.y + 9.0, c.z + Math.sin(menuCam.a) * r);
+  outLook.set(c.x, c.y - 3.4, c.z);
+}
+
+function snapMenuCamera() {
+  if (State !== 'select') return;
+  const p = new THREE.Vector3(), l = new THREE.Vector3();
+  selectCameraTarget(p, l);
+  director.pos.copy(p);
+  director.look.copy(l);
+  director.fov = 30;
+  camera.up.set(0, 1, 0);
+  camera.position.copy(p);
+  camera.lookAt(l);
+  camera.fov = 30;
+  camera.updateProjectionMatrix();
+}
+
 function menuCamera(dt) {
   menuCam.a += dt * (State === 'select' ? 0.20 : 0.05);
   if (State === 'select') {
-    const target = podiumModels[selIndex];
-    const c = target.getWorldPosition(new THREE.Vector3());
-    c.y += 1.4;
-    const r = 12.5;
-    director.pos.lerp(new THREE.Vector3(
-      c.x + Math.cos(menuCam.a) * r, c.y + 4.2, c.z + Math.sin(menuCam.a) * r), Math.min(1, 2.4 * dt));
-    director.look.lerp(c, Math.min(1, 3 * dt));
-    director.fov += (36 - director.fov) * Math.min(1, 3 * dt);
+    const wantP = new THREE.Vector3(), wantL = new THREE.Vector3();
+    selectCameraTarget(wantP, wantL);
+    director.pos.lerp(wantP, Math.min(1, 6 * dt));
+    director.look.lerp(wantL, Math.min(1, 7 * dt));
+    director.fov += (30 - director.fov) * Math.min(1, 5 * dt);
     podiumModels.forEach((m, i) => {
       const on = i === selIndex;
       m.position.y += ((on ? 0.8 : 0) - m.position.y) * Math.min(1, 5 * dt);
@@ -328,21 +374,60 @@ function menuCamera(dt) {
       m.scale.setScalar(s);
     });
   } else {
-    const t = 0.02 + (menuCam.a * 0.0008) % 0.14;
-    director.pos.lerp(track.posAt(t, 16, 10, new THREE.Vector3()), Math.min(1, 1.2 * dt));
-    director.look.lerp(track.posAt(t + 0.007, 0, 3, new THREE.Vector3()), Math.min(1, 2 * dt));
-    director.fov += (54 - director.fov) * Math.min(1, 2 * dt);
+    // a slow drift down the boulevard behind the menus
+    const t = 0.045 + (menuCam.a * 0.0009) % 0.11;
+    director.pos.lerp(track.posAt(t, 26, 16, new THREE.Vector3()), Math.min(1, 1.2 * dt));
+    director.look.lerp(track.posAt(t + 0.010, -8, 22, new THREE.Vector3()), Math.min(1, 2 * dt));
+    director.fov += (48 - director.fov) * Math.min(1, 2 * dt);
   }
+  director.cam.up.set(0, 1, 0);
   director.cam.position.copy(director.pos);
   director.cam.lookAt(director.look);
   director.cam.fov = director.fov;
   director.cam.updateProjectionMatrix();
 }
 
+// ---------------------------------------------------------------------------
+// Quality guard.
+//
+// This is a present, and it has to run on whatever machine it gets opened on.
+// Rather than ask anyone to pick a graphics preset, watch the frame time and
+// step the expensive things off one at a time until it holds up. It only ever
+// steps down, so a momentary hitch during a big explosion cannot cause it to
+// oscillate.
+// ---------------------------------------------------------------------------
+const Quality = {
+  level: 3,          // 3 everything, 2 no occlusion, 1 also lower resolution
+  frames: 0,
+  slow: 0,
+  cooldown: 2.0,
+  tick(dt) {
+    if (this.cooldown > 0) { this.cooldown -= dt; return; }
+    this.frames++;
+    if (dt > 1 / 34) this.slow++;
+    if (this.frames < 90) return;
+    const bad = this.slow / this.frames;
+    this.frames = 0; this.slow = 0;
+    if (bad < 0.45) return;
+    if (this.level === 3) {
+      this.level = 2;
+      post.setAO(false);
+      this.cooldown = 3;
+    } else if (this.level === 2) {
+      this.level = 1;
+      renderer.setPixelRatio(Math.min(1, devicePixelRatio * 0.75));
+      post.setSize(innerWidth, innerHeight);
+      this.cooldown = 3;
+    }
+  }
+};
+window.RAKHI_QUALITY = Quality;
+
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
   last = now;
+  Quality.tick(dt);
 
   Input.update(dt);
   if (Input.skipEdge && director.shot) {
@@ -367,14 +452,25 @@ function frame(now) {
   const i = SECTORS.indexOf(sec);
   const next = SECTORS[Math.min(SECTORS.length - 1, i + 1)];
   const k = THREE.MathUtils.smoothstep(t, sec.to - 0.030, sec.to);
-  if (race.state !== 'reveal') blendSector(env, sec, next, i === SECTORS.length - 1 ? 0 : k);
+  let shading = null;
+  if (race.state !== 'reveal') shading = blendSector(env, sec, next, i === SECTORS.length - 1 ? 0 : k);
 
-  // ---- shadow follows the action ----
+  // ---- the rig follows the action ----
   const focus = race.player && race.player.group.visible ? race.player.group.position : camera.position;
+  _sunDir.copy(sky.material.uniforms.uSun.value).normalize();
   sun.target.position.copy(focus);
-  sun.position.copy(focus).addScaledVector(
-    new THREE.Vector3(sec.sunPos[0], sec.sunPos[1], sec.sunPos[2]).normalize(), 300);
+  sun.position.copy(focus).addScaledVector(_sunDir, 240);
+  // the rim sits opposite the key and slightly behind, so edges catch light the
+  // key can never reach
+  rim.target.position.copy(focus);
+  rim.position.copy(focus).addScaledVector(_sunDir, -190).add(new THREE.Vector3(0, 60, 0));
   sky.position.copy(camera.position);
+
+  if (shading) {
+    syncLighting(camera, _sunDir, shading.shadowTint, shading.skyTint, shading.shadowAmt, shading.skyAmt);
+  } else {
+    syncLighting(camera, _sunDir);
+  }
 
   // ---- nameplates ----
   if (State === 'hud' && race.state === 'racing') {

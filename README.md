@@ -21,15 +21,19 @@ the import map need a real HTTP origin. Any server will do.
 
 ## Putting it on GitHub Pages
 
-`index.html` is at the repository root and everything it needs is committed
-alongside it, so Pages needs no configuration at all:
+There is a workflow at `.github/workflows/pages.yml` that publishes the whole
+repository on every push to `main`. There is no build step, so it just uploads
+the folder as it is.
 
 1. Push this folder to a GitHub repository.
-2. Settings, then Pages, then Source: **Deploy from a branch**.
-3. Branch `main`, folder `/ (root)`. Save.
+2. Settings, then Pages, then Source: **GitHub Actions**.
+3. Push to `main`. The Actions tab will show it deploying.
 
-It will be live at `https://<user>.github.io/<repo>/` in a minute or two.
+It will be live at `https://<user>.github.io/<repo>/` a minute or two later.
 `.nojekyll` is included so GitHub does not try to run Jekyll over it.
+
+If you would rather not use Actions, the branch method still works: Source
+**Deploy from a branch**, branch `main`, folder `/ (root)`.
 
 ## Controls
 
@@ -67,10 +71,52 @@ changes the entire mood of that stretch of track.
 
 ---
 
+## The look
+
+Nothing here is a downloaded model. The visual quality comes from five things,
+in rough order of how much each one matters:
+
+1. **Ambient occlusion.** Stylised flat shading with no contact darkening is
+   exactly what makes a 3D scene read as untextured geometry floating in a void.
+   `GTAOPass` puts it back. Biggest single change in the whole art pass.
+2. **A three light rig.** A warm key that throws the shadows, a hemisphere
+   filling from sky above and ground below, and a rim light sitting behind the
+   action to cut every silhouette off the background.
+3. **Four terms on every surface** (`art/materials.js`): a cool tint poured into
+   the shadow side so shade is blue rather than black, a sky term on upward
+   faces so tops separate from sides, a tight fresnel rim, and a slow world
+   space noise so no two square metres are the exact same flat colour.
+4. **Windows drawn in the shader** from world position. A thousand towers get
+   thousands of lit windows each for the cost of a few instructions, and it is
+   the difference between a skyline and a bar chart.
+5. **A real colour grade** after tone mapping: lift, gamma, gain, a contrast
+   curve, saturation and a split tone. The palette gets pushed as a whole
+   instead of by hand tuning forty material colours.
+
+Plus toon outlines on every vehicle, faceted low poly rocks and canopies rather
+than smooth spheres, stacked setback towers with roof clutter, and something
+crossing overhead every few hundred metres, which sells speed better than any
+amount of motion blur.
+
+There is a **quality guard** in `main.js` that watches the frame time and steps
+the expensive things off one at a time if the machine cannot hold up. It only
+ever steps down, so it cannot oscillate, and it means nobody has to pick a
+graphics preset.
+
+## Better art, if you want it
+
+See **`ASSETS.md`** for where to get free models and, more usefully, what is
+actually worth replacing. Drop a `.glb` into `assets/models/`, add its name to
+`index.json`, and the game uses it instead of the built in one, rescaled,
+re-oriented, re-shaded to match and outlined. No code changes.
+
 ## How it is put together
 
 ```
 index.html            the page, the import map, all the UI markup
+.github/workflows/    the Pages deploy
+assets/fonts/         the four typefaces, self hosted
+assets/models/        drop .glb files here to replace built in vehicles
 vendor/               three.js and the handful of jsm modules used
 src/
   config.js           every tunable number and every piece of content
@@ -78,12 +124,13 @@ src/
   core/
     director.js       the camera: chase rig, cinematic shots, shake, hit stop
     input.js          keyboard and gamepad
-    post.js           bloom, speed blur, aberration, vignette, grain, letterbox
+    post.js           occlusion, bloom, colour grade, speed blur, vignette, AA
   world/
     track.js          the rakhi shaped spline and the road mesh
     props.js          instanced city, forest, canyon, tunnel and arena dressing
   art/
-    materials.js      the toon and rim shading everything uses
+    materials.js      the toon shading, the shadow tint, the window shader
+    assets.js         drop-in .glb loading and re-shading
     build.js          every vehicle and character, built from code
     vfx.js            one particle system for the whole game, plus speed lines
   game/

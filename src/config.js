@@ -12,6 +12,11 @@ export const STUDIO = {
 // Each sector owns a full colour set. The swing between them is what gives the
 // race its shape, so they are deliberately far apart.
 // ---------------------------------------------------------------------------
+// Each sector is a full art direction, not just a colour. The rule that holds
+// them together: the road is always the darkest large area so the vehicles read
+// against it, the ground sits mid value, the sky is lightest, and the only
+// really bright things are small (kerbs, neon, lava, banners). Shadow tint is
+// always the complement of the key light, which is what stops shade going grey.
 export const SECTORS = [
   {
     id: 'city',
@@ -19,11 +24,13 @@ export const SECTORS = [
     name: 'THE FAMILY CITY',
     kicker: 'SECTOR 1',
     from: 0.000, to: 0.190,
-    sky: [0x7fd8ff, 0xffd6ec, 0xfff3c4],
-    fog: 0xbfe9ff, fogNear: 900, fogFar: 6200,
-    road: 0x2f2450, kerbA: 0xff3d7f, kerbB: 0xfff4e2,
-    ground: 0x4b3b78, rim: 0xfff0b8,
-    sun: 0xfff2d0, sunPos: [0.4, 0.8, 0.35], amb: 0x8fb6ff, ambI: 0.85,
+    sky: [0x2196f3, 0x8fd8ff, 0xffe8b0],
+    fog: 0xb8e2ff, fogNear: 700, fogFar: 5200, haze: 0.62,
+    road: 0x241a3e, kerbA: 0xff2f6b, kerbB: 0xfff2dc,
+    ground: 0x6b4f9e, rim: 0xfff0c0, rimI: 0.42,
+    sun: 0xfff0cc, sunI: 1.42, sunPos: [0.45, 0.72, 0.42],
+    amb: 0x9fd0ff, ambI: 0.48,
+    shadowTint: 0x2b3a8c, shadowAmt: 0.46, skyTint: 0x9fd8ff, skyAmt: 0.20,
     music: 'arcade'
   },
   {
@@ -32,11 +39,13 @@ export const SECTORS = [
     name: 'THE IMPOSSIBLE HIGHWAY',
     kicker: 'SECTOR 2',
     from: 0.190, to: 0.320,
-    sky: [0x5ec3ff, 0xffffff, 0xffc48a],
-    fog: 0xe8f4ff, fogNear: 1400, fogFar: 9000,
-    road: 0x6f6396, kerbA: 0xff6a33, kerbB: 0xffffff,
-    ground: 0xcfe6ff, rim: 0xffffff,
-    sun: 0xffffff, sunPos: [-0.3, 0.85, 0.4], amb: 0xcfe8ff, ambI: 1.0,
+    sky: [0x1e7fd4, 0xa8e0ff, 0xffd0a0],
+    fog: 0xe8f2ff, fogNear: 1100, fogFar: 8000, haze: 0.78,
+    road: 0x2e2748, kerbA: 0xff6a2b, kerbB: 0xffffff,
+    ground: 0xcfe4ff, rim: 0xffffff, rimI: 0.48,
+    sun: 0xffffff, sunI: 1.55, sunPos: [-0.35, 0.78, 0.42],
+    amb: 0xd4ecff, ambI: 0.58,
+    shadowTint: 0x3a56a8, shadowAmt: 0.40, skyTint: 0xd0eaff, skyAmt: 0.26,
     music: 'tension'
   },
   {
@@ -45,11 +54,13 @@ export const SECTORS = [
     name: 'THE FOREST OF CHAOS',
     kicker: 'SECTOR 3',
     from: 0.320, to: 0.520,
-    sky: [0x2f6b4a, 0x8fd67a, 0xffd98a],
-    fog: 0x3f7a55, fogNear: 500, fogFar: 4200,
-    road: 0x3d3222, kerbA: 0xffc23d, kerbB: 0xf0e4c0,
-    ground: 0x1f4227, rim: 0xd6ff9e,
-    sun: 0xfff0c0, sunPos: [0.6, 0.55, -0.4], amb: 0x4f8f5e, ambI: 0.75,
+    sky: [0x0d2b3e, 0x5f9c86, 0xffd486],
+    fog: 0x1f4a34, fogNear: 260, fogFar: 2600, haze: 0.44,
+    road: 0x2b2116, kerbA: 0xffbe2b, kerbB: 0xe8dcb4,
+    ground: 0x27502e, rim: 0xffe08a, rimI: 0.40,
+    sun: 0xfff0b8, sunI: 1.62, sunPos: [0.62, 0.44, -0.42],
+    amb: 0x2f6b40, ambI: 0.40,
+    shadowTint: 0x123c46, shadowAmt: 0.52, skyTint: 0x86d8a0, skyAmt: 0.18,
     music: 'tension'
   },
   {
@@ -58,11 +69,13 @@ export const SECTORS = [
     name: 'THE FAMILY VOLCANO',
     kicker: 'SECTOR 4',
     from: 0.520, to: 0.700,
-    sky: [0x1a0a12, 0x6b1f22, 0xff8a2b],
-    fog: 0x36121a, fogNear: 350, fogFar: 3400,
-    road: 0x201720, kerbA: 0xff6a1f, kerbB: 0xffd24a,
-    ground: 0x1d1016, rim: 0xff9a3d,
-    sun: 0xffb054, sunPos: [-0.5, 0.4, -0.6], amb: 0x662030, ambI: 0.9,
+    sky: [0x120610, 0x5c1418, 0xff8320],
+    fog: 0x2a0d12, fogNear: 200, fogFar: 2200, haze: 0.5,
+    road: 0x140d13, kerbA: 0xff5a14, kerbB: 0xffc93d,
+    ground: 0x120a0e, rim: 0xff9a3d, rimI: 0.55,
+    sun: 0xffab48, sunI: 1.30, sunPos: [-0.5, 0.34, -0.62],
+    amb: 0x5c1c24, ambI: 0.42,
+    shadowTint: 0x3d0f1e, shadowAmt: 0.5, skyTint: 0xff7a3d, skyAmt: 0.24,
     music: 'dread'
   },
   {
@@ -71,11 +84,13 @@ export const SECTORS = [
     name: 'THE UNDERGROUND',
     kicker: 'SECTOR 5',
     from: 0.700, to: 0.870,
-    sky: [0x040a10, 0x0a1a26, 0x123240],
-    fog: 0x061019, fogNear: 220, fogFar: 2600,
-    road: 0x141d27, kerbA: 0x27e0d0, kerbB: 0xff3d7a,
-    ground: 0x0a141c, rim: 0x4affe8,
-    sun: 0x9fe8ff, sunPos: [0.2, 0.9, 0.1], amb: 0x0f3a4a, ambI: 0.7,
+    sky: [0x02060c, 0x061420, 0x0d2c38],
+    fog: 0x04101a, fogNear: 160, fogFar: 1500, haze: 0.34,
+    road: 0x18242f, kerbA: 0x1fe8d4, kerbB: 0xff2f6b,
+    ground: 0x060c12, rim: 0x4affe8, rimI: 0.58,
+    sun: 0x9fe8ff, sunI: 1.05, sunPos: [0.2, 0.9, 0.1],
+    amb: 0x14485c, ambI: 0.55,
+    shadowTint: 0x06212e, shadowAmt: 0.58, skyTint: 0x2fd0e0, skyAmt: 0.2,
     music: 'dread'
   },
   {
@@ -84,11 +99,13 @@ export const SECTORS = [
     name: 'THE ARENA',
     kicker: 'FINAL SECTOR',
     from: 0.870, to: 1.000,
-    sky: [0x2a1a4a, 0x6b3f96, 0xffbe4a],
-    fog: 0x241540, fogNear: 700, fogFar: 6000,
-    road: 0x2c1f42, kerbA: 0xffc93d, kerbB: 0xff4f9b,
-    ground: 0x1c1030, rim: 0xffd777,
-    sun: 0xffd9a0, sunPos: [0.15, 0.62, 0.75], amb: 0x6a4aa8, ambI: 1.35,
+    sky: [0x120a26, 0x46256e, 0xffb03d],
+    fog: 0x1d1136, fogNear: 420, fogFar: 4200, haze: 0.48,
+    road: 0x1c1330, kerbA: 0xffc93d, kerbB: 0xff4f9b,
+    ground: 0x160d28, rim: 0xffcf7a, rimI: 0.52,
+    sun: 0xffd49a, sunI: 1.34, sunPos: [0.18, 0.56, 0.72],
+    amb: 0x53368c, ambI: 0.52,
+    shadowTint: 0x2a1a5e, shadowAmt: 0.48, skyTint: 0xa985ff, skyAmt: 0.22,
     music: 'boss'
   }
 ];

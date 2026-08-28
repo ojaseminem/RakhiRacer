@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { makeToon, makeGlow } from './materials.js';
+import { makeToon, makeGlow, addOutline } from './materials.js';
+import { getModel } from './assets.js';
 
 // ---------------------------------------------------------------------------
 // Every object in this game is built out of code. No model files, nothing to
@@ -54,7 +55,7 @@ function wheel(radius, width, hubColor, glowColor) {
   g.add(hub);
 
   if (glowColor !== undefined) {
-    const ring = new THREE.Mesh(tor(radius * 0.72, radius * 0.09, 18), makeGlow(glowColor, 0.95));
+    const ring = new THREE.Mesh(tor(radius * 0.72, radius * 0.09, 18), makeGlow(glowColor, 0.60));
     ring.rotation.y = Math.PI / 2;
     g.add(ring);
     g.userData.glowRing = ring;
@@ -118,8 +119,31 @@ export function bean(bodyColor, accentColor = 0xffffff, scale = 1) {
 // THE THREE HERO RIDES
 // ---------------------------------------------------------------------------
 
+// If a drop-in model exists for this slot, use it and skip the built in one.
+// Anything in the file whose name looks like a wheel still gets spun.
+function fromDropIn(slot, spec) {
+  const m = getModel(slot);
+  if (!m) return null;
+  const wheels = [];
+  m.traverse((o) => {
+    if (!o.isMesh && !o.isGroup) return;
+    const n = (o.name || '').toLowerCase();
+    if (/wheel|tyre|tire|rim/.test(n) && !o.userData.noOutline) {
+      o.userData.radius = 0.5;
+      wheels.push(o);
+    }
+  });
+  m.userData.wheels = wheels;
+  m.userData.glows = [];
+  m.userData.spec = spec;
+  m.userData.dropIn = true;
+  return m;
+}
+
 function heroWrap(build) {
   return (spec) => {
+    const dropIn = fromDropIn(spec.id, spec);
+    if (dropIn) return dropIn;
     const g = new THREE.Group();
     const wheels = [];
     const glows = [];
@@ -127,6 +151,9 @@ function heroWrap(build) {
     g.userData.wheels = wheels;
     g.userData.glows = glows;
     g.userData.spec = spec;
+    // an inverted hull outline. this is the single thing that stops a stylised
+    // vehicle dissolving into whatever colour is behind it.
+    addOutline(g, 0.045);
     return g;
   };
 }
@@ -267,18 +294,18 @@ export const buildComet = heroWrap((g, spec, wheels, glows) => {
     const wl = mesh(rbox(0.9, 0.1, 1.6, 0.05), acc, s * 0.68, 1.05, -0.5);
     wl.rotation.z = s * 0.22;
     g.add(wl);
-    const strip = new THREE.Mesh(rbox(0.86, 0.05, 1.3, 0.02), makeGlow(spec.glow, 0.9));
+    const strip = new THREE.Mesh(rbox(0.86, 0.05, 1.3, 0.02), makeGlow(spec.glow, 0.55));
     strip.position.set(s * 0.70, 1.11, -0.5);
     strip.rotation.z = s * 0.22;
     g.add(strip); glows.push(strip);
   }
   // thruster
-  const th = new THREE.Mesh(cyl(0.30, 0.34, 0.2, 14), makeGlow(spec.glow, 1));
+  const th = new THREE.Mesh(cyl(0.30, 0.34, 0.2, 14), makeGlow(spec.glow, 0.75));
   th.rotation.x = Math.PI / 2;
   th.position.set(0, 1.24, -2.62);
   g.add(th); glows.push(th);
   // underglow slab, sells the hover
-  const ug = new THREE.Mesh(rbox(1.1, 0.06, 3.6, 0.03), makeGlow(spec.glow, 0.55));
+  const ug = new THREE.Mesh(rbox(1.1, 0.06, 3.6, 0.03), makeGlow(spec.glow, 0.28));
   ug.position.set(0, 0.42, 0);
   g.add(ug); glows.push(ug);
 
@@ -317,6 +344,11 @@ const RIDE_SHAPES = {
 };
 
 export function buildFamilyRide(rideId, color, accent) {
+  const dropIn = fromDropIn(rideId, null);
+  if (dropIn) {
+    dropIn.userData.height = 2.2;
+    return dropIn;
+  }
   const s = RIDE_SHAPES[rideId] || RIDE_SHAPES.sedan;
   const g = new THREE.Group();
   const wheels = [];
@@ -387,5 +419,6 @@ export function buildFamilyRide(rideId, color, accent) {
 
   g.userData.wheels = wheels;
   g.userData.height = s.ry + s.h;
+  addOutline(g, 0.05);
   return g;
 }

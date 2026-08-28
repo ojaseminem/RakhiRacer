@@ -1,4 +1,19 @@
 /* ===========================================================================
+   TYPE
+   All four faces ship with the game. Nothing loads from a CDN, so the interface
+   looks the same on the first frame as it does on the hundredth.
+   =========================================================================== */
+@font-face{font-family:'Titan One';src:url('../../assets/fonts/titan-one/titan-one-latin-400-normal.woff2') format('woff2');font-weight:400;font-display:block}
+@font-face{font-family:'Bungee';src:url('../../assets/fonts/bungee/bungee-latin-400-normal.woff2') format('woff2');font-weight:400;font-display:block}
+@font-face{font-family:'Chakra Petch';src:url('../../assets/fonts/chakra-petch/chakra-petch-latin-400-normal.woff2') format('woff2');font-weight:400;font-display:block}
+@font-face{font-family:'Chakra Petch';src:url('../../assets/fonts/chakra-petch/chakra-petch-latin-500-normal.woff2') format('woff2');font-weight:500;font-display:block}
+@font-face{font-family:'Chakra Petch';src:url('../../assets/fonts/chakra-petch/chakra-petch-latin-600-normal.woff2') format('woff2');font-weight:600;font-display:block}
+@font-face{font-family:'Chakra Petch';src:url('../../assets/fonts/chakra-petch/chakra-petch-latin-700-normal.woff2') format('woff2');font-weight:700;font-display:block}
+@font-face{font-family:'Sora';src:url('../../assets/fonts/sora/sora-latin-400-normal.woff2') format('woff2');font-weight:400;font-display:block}
+@font-face{font-family:'Sora';src:url('../../assets/fonts/sora/sora-latin-700-normal.woff2') format('woff2');font-weight:700;font-display:block}
+@font-face{font-family:'Sora';src:url('../../assets/fonts/sora/sora-latin-800-normal.woff2') format('woff2');font-weight:800;font-display:block}
+
+/* ===========================================================================
    RAKHI: THE GRAND FAMILY RACE
    Turtle Game Works
 
@@ -102,7 +117,7 @@ html, body {
 /* ===========================================================================
    BOOT
    =========================================================================== */
-#boot { background: radial-gradient(ellipse at 50% 40%, #1d0f2e, var(--ink) 72%); }
+#boot { background: radial-gradient(ellipse at 50% 40%, rgba(29,15,46,.92), rgba(10,7,16,.97) 72%); }
 .boot-inner { text-align: center; display: flex; flex-direction: column; align-items: center; }
 
 /* a small rakhi drawn in css: two threads and a knot */
@@ -157,7 +172,11 @@ html, body {
 /* ===========================================================================
    TITLE
    =========================================================================== */
-#title { background: radial-gradient(ellipse at 30% 45%, #24123a, var(--ink) 70%); }
+#title {
+  background:
+    linear-gradient(100deg, rgba(10,7,16,.95) 0%, rgba(10,7,16,.86) 42%, rgba(10,7,16,.30) 72%, rgba(10,7,16,.55) 100%),
+    linear-gradient(0deg, rgba(10,7,16,.80), rgba(10,7,16,0) 45%);
+}
 .title-grid { width: 100%; max-width: 1180px; }
 .title-block { max-width: 780px; }
 .big-title {
@@ -442,7 +461,7 @@ html, body {
 /* ===========================================================================
    RESULTS
    =========================================================================== */
-#results { background: radial-gradient(ellipse at 50% 34%, #2c1640, rgba(10,7,16,.94) 72%); }
+#results { background: radial-gradient(ellipse at 50% 34%, rgba(44,22,64,.90), rgba(10,7,16,.95) 72%); }
 .res-inner { text-align: center; max-width: 760px; }
 .res-rankwrap { display: flex; justify-content: center; }
 .res-rank {

@@ -230,8 +230,8 @@ export function buildRoadMesh(track) {
   // carries the dashed line so the whole road is still one draw call.
   const section = [
     [-1.34, -16], [-1.06, -1.8], [-1.00, 0.05], [-0.90, 0.06],
-    [-0.86, 0.20], [-0.10, 0.27], [-0.055, 0.28],
-    [ 0.055, 0.28], [ 0.10, 0.27], [ 0.86, 0.20],
+    [-0.86, 0.20], [-0.075, 0.27], [-0.032, 0.28],
+    [ 0.032, 0.28], [ 0.075, 0.27], [ 0.86, 0.20],
     [ 0.90, 0.06], [ 1.00, 0.05], [ 1.06, -1.8], [ 1.34, -16]
   ];
   const cols = section.length;
@@ -256,7 +256,7 @@ export function buildRoadMesh(track) {
     cKerbA.setHex(sec.kerbA).lerp(c.setHex(next.kerbA), fadeIn);
     cKerbB.setHex(sec.kerbB).lerp(c.setHex(next.kerbB), fadeIn);
     cSkirt.copy(cRoad).multiplyScalar(0.42);
-    cLine.copy(cKerbB).lerp(c.setRGB(1, 1, 1), 0.35);
+    cLine.copy(cKerbB).multiplyScalar(0.78);
 
     const half = track.half[i];
     const kerbTooth = (Math.floor(i / 5) % 2) === 0;
