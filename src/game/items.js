@@ -41,36 +41,166 @@ export function rollItem(position = 6, total = 13) {
   return best || ITEMS[0];
 }
 
+
+// ---------------------------------------------------------------------------
+// Item box icons.
+//
+// The boxes used to be plain cubes, so there was nothing to tell you what a
+// pickup was or even that it was a pickup. Each one is now a flat drawn icon
+// facing the camera with a glow behind it, cycling through the roster the way
+// a mystery box should, because the item itself is still rolled on pickup.
+// The icons are drawn with canvas paths rather than loaded, so there is no
+// asset to ship and they stay crisp at any size.
+// ---------------------------------------------------------------------------
+const ICON_PX = 160;
+
+function iconCanvas(draw, color) {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = ICON_PX;
+  const c = cv.getContext('2d');
+  c.translate(ICON_PX / 2, ICON_PX / 2);
+  c.scale(ICON_PX / 100, ICON_PX / 100);       // draw in a 100x100 box, centred
+  c.lineJoin = c.lineCap = 'round';
+  c.strokeStyle = 'rgba(14,5,20,0.92)';
+  c.lineWidth = 9;
+  c.fillStyle = color;
+  draw(c);
+  return cv;
+}
+
+// each one draws a path then calls fin() to ink and fill it
+const ink = (c) => { c.stroke(); c.fill(); };
+
+const ICON_ART = {
+  sugar: (c) => {                                   // a boiled sweet
+    c.beginPath(); c.arc(0, 0, 25, 0, Math.PI * 2); ink(c);
+    c.beginPath();
+    c.moveTo(-25, 0); c.lineTo(-44, -16); c.lineTo(-38, 0); c.lineTo(-44, 16); c.closePath(); ink(c);
+    c.beginPath();
+    c.moveTo(25, 0); c.lineTo(44, -16); c.lineTo(38, 0); c.lineTo(44, 16); c.closePath(); ink(c);
+  },
+  banana: (c) => {                                  // a peel, three strips
+    c.save(); c.rotate(-0.2);
+    for (let i = -1; i <= 1; i++) {
+      c.save(); c.rotate(i * 0.62);
+      c.beginPath();
+      c.moveTo(0, 8); c.quadraticCurveTo(-9, -20, 0, -42);
+      c.quadraticCurveTo(9, -20, 0, 8); c.closePath(); ink(c);
+      c.restore();
+    }
+    c.beginPath(); c.arc(0, 14, 13, 0, Math.PI * 2); ink(c);
+    c.restore();
+  },
+  bazooka: (c) => {                                 // a chappal, sole and strap
+    c.beginPath();
+    c.moveTo(-16, -40); c.quadraticCurveTo(20, -34, 18, 0);
+    c.quadraticCurveTo(17, 36, -14, 40);
+    c.quadraticCurveTo(-30, 20, -28, 0);
+    c.quadraticCurveTo(-30, -22, -16, -40); c.closePath(); ink(c);
+    c.beginPath(); c.lineWidth = 8;
+    c.moveTo(-20, -14); c.quadraticCurveTo(0, -2, 12, -20); c.stroke();
+  },
+  slick: (c) => {                                   // a drop of ghee
+    c.beginPath();
+    c.moveTo(0, -44);
+    c.quadraticCurveTo(30, -6, 30, 10);
+    c.arc(0, 10, 30, 0, Math.PI);
+    c.quadraticCurveTo(-30, -6, 0, -44); c.closePath(); ink(c);
+  },
+  blessing: (c) => {                                // an open palm
+    c.beginPath();
+    c.moveTo(-22, 42); c.lineTo(-22, -6);
+    c.lineTo(-22, -30); c.lineTo(-8, -30); c.lineTo(-8, -6);
+    c.lineTo(-8, -42); c.lineTo(6, -42); c.lineTo(6, -6);
+    c.lineTo(6, -34); c.lineTo(20, -34); c.lineTo(20, 4);
+    c.quadraticCurveTo(30, 20, 20, 42); c.closePath(); ink(c);
+  },
+  thread: (c) => {                                  // the rakhi itself
+    c.beginPath(); c.arc(0, 0, 17, 0, Math.PI * 2); ink(c);
+    c.beginPath(); c.lineWidth = 9;
+    c.moveTo(-17, -4); c.quadraticCurveTo(-42, -18, -46, 6); c.stroke();
+    c.moveTo(17, -4); c.quadraticCurveTo(42, -18, 46, 6); c.stroke();
+    c.beginPath(); c.arc(0, 0, 7, 0, Math.PI * 2); c.fillStyle = 'rgba(14,5,20,0.9)'; c.fill();
+  },
+  bonk: (c) => {                                    // a boxing glove
+    c.beginPath();
+    c.moveTo(-30, -18);
+    c.quadraticCurveTo(-30, -44, 2, -44);
+    c.quadraticCurveTo(34, -44, 34, -12);
+    c.quadraticCurveTo(34, 14, 8, 16);
+    c.lineTo(8, 34); c.lineTo(-26, 34); c.lineTo(-26, 12);
+    c.quadraticCurveTo(-30, 0, -30, -18); c.closePath(); ink(c);
+    c.beginPath(); c.lineWidth = 8;
+    c.moveTo(-24, 14); c.lineTo(8, 14); c.stroke();
+  },
+  thunder: (c) => {                                 // a bolt
+    c.beginPath();
+    c.moveTo(10, -46); c.lineTo(-26, 4); c.lineTo(-2, 4);
+    c.lineTo(-10, 46); c.lineTo(26, -8); c.lineTo(2, -8); c.closePath(); ink(c);
+  }
+};
+
+// a soft radial disc, used behind every icon
+function glowTexture() {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 128;
+  const c = cv.getContext('2d');
+  const g = c.createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0.00, 'rgba(255,255,255,0.95)');
+  g.addColorStop(0.22, 'rgba(255,255,255,0.55)');
+  g.addColorStop(0.55, 'rgba(255,255,255,0.16)');
+  g.addColorStop(1.00, 'rgba(255,255,255,0)');
+  c.fillStyle = g;
+  c.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(cv);
+}
+
 export class ItemField {
-  constructor(scene, track, vfx, audio) {
+  constructor(scene, track, vfx, audio, camera) {
     this.track = track;
     this.scene = scene;
+    this.camera = camera;
     this.vfx = vfx;
     this.audio = audio;
     this.boxes = [];
     this.projectiles = [];
     this.hazards = [];
 
-    const geo = rbox(3.0, 3.0, 3.0, 0.5);
-    const mat = makeToon({
-      color: 0xfff6e2, rim: 0xffe08a, rimStrength: 0.5, rimPower: 3.0,
-      emissive: 0x1a1000, bounceStrength: 0.4
-    });
-    this.mesh = new THREE.InstancedMesh(geo, mat, 700);
-    this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(700 * 3), 3);
-    this.mesh.frustumCulled = false;
-    this.mesh.castShadow = true;
-    scene.add(this.mesh);
+    // ---- pickups ---------------------------------------------------------
+    // One material per item icon, and a pool of sprites shared between whichever
+    // boxes are close enough to see. Never more than a couple of dozen are on
+    // screen, so a pool is far cheaper than seven hundred of anything.
+    // Flat planes turned to face the camera, not THREE.Sprite. The occlusion
+    // pass renders the scene through an override material, and a sprite's
+    // billboarding lives in its own vertex shader, so under the override every
+    // sprite collapsed and came back as a solid black rectangle.
+    this.iconMats = ITEMS.map(it => new THREE.MeshBasicMaterial({
+      map: new THREE.CanvasTexture(iconCanvas(ICON_ART[it.id] || ICON_ART.thunder,
+        '#' + it.color.toString(16).padStart(6, '0'))),
+      transparent: true, depthWrite: false, toneMapped: false, fog: false,
+      side: THREE.DoubleSide
+    }));
+    this.iconMats.forEach(m => { m.map.colorSpace = THREE.SRGBColorSpace; m.map.anisotropy = 4; });
 
-    this.core = new THREE.InstancedMesh(
-      new THREE.OctahedronGeometry(0.95, 0),
-      new THREE.MeshBasicMaterial({
-        transparent: true, opacity: 0.62, toneMapped: false,
-        blending: THREE.AdditiveBlending, depthWrite: false
-      }), 700);
-    this.core.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(700 * 3), 3);
-    this.core.frustumCulled = false;
-    scene.add(this.core);
+    const glowTex = glowTexture();
+    const quad = new THREE.PlaneGeometry(1, 1);
+    this.pickups = [];
+    for (let i = 0; i < 34; i++) {
+      const g = new THREE.Group();
+      const glow = new THREE.Mesh(quad, new THREE.MeshBasicMaterial({
+        map: glowTex, transparent: true, depthWrite: false, toneMapped: false,
+        blending: THREE.AdditiveBlending, opacity: 0.7, fog: false, side: THREE.DoubleSide
+      }));
+      glow.scale.setScalar(11);
+      const icon = new THREE.Mesh(quad, this.iconMats[0]);
+      icon.scale.setScalar(4.6);
+      icon.position.z = 0.02;
+      g.add(glow); g.add(icon);
+      g.visible = false;
+      g.renderOrder = 12;
+      scene.add(g);
+      this.pickups.push({ group: g, glow, icon });
+    }
 
     // shared materials for the things she throws and drops
     this.matBanana = makeToon({ color: 0xffd23d, rim: 0xfff4c0, rimStrength: 1.2, noise: 0.05 });
@@ -93,59 +223,68 @@ export class ItemField {
         }
       }
     }
-    this.mesh.count = Math.min(700, this.boxes.length);
-    this.core.count = this.mesh.count;
+  }
+
+  setVisible(on) {
+    for (const s of this.pickups) if (!on) s.group.visible = false;
+    this.pickupsHidden = !on;
   }
 
   reset() {
-    for (const h of this.hazards) this.scene.remove(h.mesh);
-    for (const p of this.projectiles) this.scene.remove(p.mesh);
+    for (const h of this.hazards) { this.scene.remove(h.mesh); if (h.ring) this.scene.remove(h.ring); }
+    for (const p of this.projectiles) { this.scene.remove(p.mesh); if (p.reticle) this.scene.remove(p.reticle); }
     this.hazards.length = 0;
     this.projectiles.length = 0;
     this.tether = null;
   }
 
   // ---- the boxes --------------------------------------------------------
+  // Only the handful in front of her get a sprite from the pool. The icon
+  // cycles through the roster, which is the honest thing to show: what she
+  // actually gets is still rolled at the moment she drives through it.
   update(dt, player, hud, hooks = {}) {
     const tr = this.track;
-    const c = new THREE.Color();
+    if (this.pickupsHidden) return;
+    this.cycle = (this.cycle || 0) + dt;
     let n = 0;
+
     for (const b of this.boxes) {
-      if (n >= 700) break;
+      if (n >= this.pickups.length) break;
       if (b.taken > 0) { b.taken -= dt; if (b.taken <= 0) b.taken = 0; }
       const gap = (b.t - player.t) * tr.length;
-      if (gap < -60 || gap > 900) continue;
+      if (gap < -40 || gap > 640) continue;
+      const alive = b.taken <= 0;
+      if (!alive) continue;
 
       b.spin += dt * 1.9;
-      const alive = b.taken <= 0;
-      tr.posAt(b.t, b.lat, alive ? 3.0 + Math.sin(b.spin * 1.4) * 0.5 : -20, _v);
-      tr.tanAt(b.t, _v2); tr.upAt(b.t, _v3);
-      const right = new THREE.Vector3().crossVectors(_v3, _v2).normalize();
-      _m.makeBasis(right, _v3, _v2);
-      _m.setPosition(_v);
-      _m.multiply(new THREE.Matrix4().makeRotationY(b.spin));
-      this.mesh.setMatrixAt(n, _m);
-      this.core.setMatrixAt(n, new THREE.Matrix4().copy(_m).scale(new THREE.Vector3(0.6, 0.6, 0.6)));
-      c.setHSL((b.spin * 0.06) % 1, 0.85, 0.60);
-      this.core.setColorAt(n, c);
-      this.mesh.setColorAt(n, c.setHSL((b.spin * 0.06) % 1, 0.62, 0.70));
-      n++;
+      const slot = this.pickups[n++];
+      tr.posAt(b.t, b.lat, 3.2 + Math.sin(b.spin * 1.4) * 0.45, slot.group.position);
+      slot.group.visible = true;
 
-      if (alive && Math.abs(gap) < 4.5 && Math.abs(b.lat - player.lat) < 4.4 && !player.item) {
+      // each box is offset in the cycle so a row of them is never in lockstep
+      const idx = Math.floor(this.cycle * 1.6 + b.spin) % this.iconMats.length;
+      if (slot.icon.material !== this.iconMats[idx]) slot.icon.material = this.iconMats[idx];
+
+      const it = ITEMS[idx];
+      slot.glow.material.color.setHex(it.color);
+      const near = 1 - Math.min(1, Math.max(0, gap) / 640);
+      const breathe = 1 + Math.sin(b.spin * 2.4) * 0.07;
+      slot.glow.scale.setScalar(12.5 * breathe);
+      slot.glow.material.opacity = 0.55 + near * 0.45;
+      slot.icon.scale.setScalar(5.6 * breathe);
+      if (this.camera) slot.group.quaternion.copy(this.camera.quaternion);
+
+      if (Math.abs(gap) < 4.5 && Math.abs(b.lat - player.lat) < 4.4 && !player.item) {
         b.taken = 7;
         player.item = rollItem(hooks.position || 6, hooks.total || 13);
         hud.setItem(player.item);
         this.audio && this.audio.pickup();
-        this.vfx.sparks(_v, 16, player.item.color, 8, 8);
+        this.vfx.sparks(slot.group.position, 18, player.item.color, 8, 8);
         if (hooks.onPickup) hooks.onPickup(player.item);
       }
     }
-    this.mesh.count = n;
-    this.core.count = n;
-    this.mesh.instanceMatrix.needsUpdate = true;
-    this.core.instanceMatrix.needsUpdate = true;
-    if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
-    if (this.core.instanceColor) this.core.instanceColor.needsUpdate = true;
+
+    for (let i = n; i < this.pickups.length; i++) this.pickups[i].group.visible = false;
   }
 
   // ---- using one -------------------------------------------------------
@@ -183,7 +322,7 @@ export class ItemField {
         }
         m.add(new THREE.Mesh(rbox(0.7, 0.3, 0.7, 0.14), this.matBanana));
         this.scene.add(m);
-        this.dropHazard('banana', player.t - 0.0009, player.lat, m, 3.4, 26);
+        this.dropHazard('banana', player.t - 0.0009, player.lat, m, 3.4, 26, 'you');
         A && A.itemDrop();
         break;
       }
@@ -192,7 +331,7 @@ export class ItemField {
         const m = new THREE.Mesh(new THREE.CircleGeometry(1, 20), this.matSlick);
         m.rotation.x = -Math.PI / 2;
         this.scene.add(m);
-        this.dropHazard('slick', player.t - 0.0010, player.lat, m, 11, 22);
+        this.dropHazard('slick', player.t - 0.0010, player.lat, m, 11, 22, 'you');
         A && A.itemSplat();
         break;
       }
@@ -209,8 +348,9 @@ export class ItemField {
         m.add(flame);
         this.scene.add(m);
         this.projectiles.push({
-          kind: 'bazooka', t: player.t + 0.0004, lat: player.lat, mesh: m,
-          vel: 96, latVel: 0, life: 6, age: 0, target: this.nearestAhead(player, pack, 700)
+          kind: 'bazooka', t: player.t + 0.0004, lat: player.lat, mesh: m, owner: 'you',
+          reticle: this.addReticle(0xff8a2b),
+          vel: 128, latVel: 0, life: 6, age: 0, target: this.nearestAhead(player, pack, 700)
         });
         A && A.itemLaunch();
         break;
@@ -232,8 +372,9 @@ export class ItemField {
         }
         this.scene.add(m);
         this.projectiles.push({
-          kind: 'bonk', t: player.t + 0.0004, lat: player.lat, mesh: m,
-          vel: 74, latVel: 0, life: 4.5, age: 0, target: this.nearestAhead(player, pack, 400)
+          kind: 'bonk', t: player.t + 0.0004, lat: player.lat, mesh: m, owner: 'you',
+          reticle: this.addReticle(0x2be0c0),
+          vel: 99, latVel: 0, life: 4.5, age: 0, target: this.nearestAhead(player, pack, 400)
         });
         A && A.itemLaunch();
         break;
@@ -297,20 +438,63 @@ export class ItemField {
       }
       m.add(new THREE.Mesh(rbox(0.7, 0.3, 0.7, 0.14), this.matBanana));
       this.scene.add(m);
-      this.dropHazard('banana', racer.t - 0.0007, racer.lat, m, 3.4, 22);
+      this.dropHazard('banana', racer.t - 0.0007, racer.lat, m, 3.4, 22, racer.def.title);
     } else {
       const m = new THREE.Mesh(new THREE.CircleGeometry(1, 20), this.matSlick);
       m.rotation.x = -Math.PI / 2;
       this.scene.add(m);
-      this.dropHazard('slick', racer.t - 0.0008, racer.lat, m, 9, 18);
+      this.dropHazard('slick', racer.t - 0.0008, racer.lat, m, 9, 18, racer.def.title);
     }
   }
 
-  dropHazard(kind, t, lat, mesh, radius, life) {
-    this.hazards.push({ kind, t, lat, mesh, radius, life, age: 0, cool: new Map() });
+  // A flat pulsing ring painted on the road under a hazard. The peel itself is
+  // a few centimetres of banana at two hundred and sixty; the ring is what you
+  // actually see in time to steer around it.
+  // A spinning bracket that locks onto whoever a homing item has chosen. Fired
+  // a slipper into the pack and had no idea where it went, was the note.
+  addReticle(color) {
+    const r = this.makeReticle(color);
+    this.scene.add(r);
+    return r;
+  }
+
+  makeReticle(color) {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshBasicMaterial({
+      color, transparent: true, opacity: 0.95, depthWrite: false, depthTest: false,
+      blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false
+    });
+    // four corner brackets rather than a full ring, which reads as a lock on
+    for (let i = 0; i < 4; i++) {
+      const a = Math.PI / 4 + i * Math.PI / 2;
+      const arc = new THREE.Mesh(new THREE.RingGeometry(2.5, 3.1, 8, 1, a - 0.28, 0.56), mat);
+      g.add(arc);
+    }
+    g.renderOrder = 30;
+    return g;
+  }
+
+  makeHazardRing(kind) {
+    const color = kind === 'banana' ? 0xffd23d : 0xffe08a;
+    const g = new THREE.RingGeometry(0.72, 1.0, 26);
+    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({
+      color, transparent: true, opacity: 0.85, depthWrite: false,
+      blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false
+    }));
+    m.rotation.x = -Math.PI / 2;
+    m.renderOrder = 6;
+    return m;
+  }
+
+  dropHazard(kind, t, lat, mesh, radius, life, owner = 'the road') {
+    // owner is only ever used to say whose fault it was in the feed
+    const ring = this.makeHazardRing(kind);
+    this.scene.add(ring);
+    this.hazards.push({ kind, t, lat, mesh, ring, radius, life, age: 0, owner, cool: new Map() });
     if (this.hazards.length > 40) {
       const old = this.hazards.shift();
       this.scene.remove(old.mesh);
+      if (old.ring) this.scene.remove(old.ring);
     }
   }
 
@@ -337,6 +521,7 @@ export class ItemField {
       h.age += dt;
       if (h.age > h.life) {
         this.scene.remove(h.mesh);
+        if (h.ring) this.scene.remove(h.ring);
         this.hazards.splice(i, 1);
         continue;
       }
@@ -348,12 +533,27 @@ export class ItemField {
       _v3.crossVectors(_v2, _v).normalize();
       _m.makeBasis(_v3, _v2, _v);
       h.mesh.quaternion.setFromRotationMatrix(_m);
+      // the basis puts local XY upright, so a flat disc has to be laid down
+      // again afterwards. Without this the ghee slick was a vertical plate
+      // standing in the road, which is exactly as confusing as it sounds.
+      if (h.kind === 'slick') h.mesh.rotateX(-Math.PI / 2);
       if (h.kind === 'slick') {
         const grow = Math.min(1, h.age * 2.2);
         h.mesh.scale.set(h.radius * grow, h.radius * grow * 0.55, 1);
         h.mesh.material.opacity = 0.5 * (1 - Math.pow(h.age / h.life, 4));
       } else {
         h.mesh.rotation.y += dt * 0.6;
+      }
+
+      // the warning ring: sits flat, breathes, and fades out with the hazard
+      if (h.ring) {
+        const rad = h.kind === 'slick' ? h.radius * Math.min(1, h.age * 2.2) : 3.4;
+        const pulse = 1 + Math.sin(h.age * 6.5) * 0.09;
+        tr.posAt(h.t, h.lat, 0.16, h.ring.position);
+        h.ring.quaternion.copy(h.mesh.quaternion);
+        h.ring.rotateX(-Math.PI / 2);
+        h.ring.scale.setScalar(Math.max(2.6, rad) * pulse);
+        h.ring.material.opacity = 0.9 * (1 - Math.pow(h.age / h.life, 3));
       }
 
       // who is standing in it
@@ -371,11 +571,11 @@ export class ItemField {
           if (h.kind === 'banana') {
             if (player.slip(1.2, true)) {
               this.audio && this.audio.slipBanana();
-              if (hooks.onPlayerSlip) hooks.onPlayerSlip('banana');
+              if (hooks.onPlayerSlip) hooks.onPlayerSlip('banana', h.owner);
             }
           } else if (player.slip(1.0, false)) {
             this.audio && this.audio.slipSlick();
-            if (hooks.onPlayerSlip) hooks.onPlayerSlip('slick');
+            if (hooks.onPlayerSlip) hooks.onPlayerSlip('slick', h.owner);
           }
         } else {
           vv.stun = h.kind === 'banana' ? 1.4 : 0.9;
@@ -384,7 +584,7 @@ export class ItemField {
           this.vfx.sparks(vv.group.position, 10, h.kind === 'banana' ? 0xffd23d : 0xffe08a);
           player.punts++;
           this.audio && this.audio.slipBanana(0.6);
-          if (hooks.onHitRelative) hooks.onHitRelative(vv, h.kind);
+          if (hooks.onHitRelative) hooks.onHitRelative(vv, h.kind, h.owner);
         }
       }
       for (const [k, t0] of h.cool) if (t0 > 0) h.cool.set(k, t0 - dt);
@@ -394,7 +594,12 @@ export class ItemField {
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
       p.age += dt;
-      if (p.age > p.life) { this.scene.remove(p.mesh); this.projectiles.splice(i, 1); continue; }
+      if (p.age > p.life) {
+        this.scene.remove(p.mesh);
+        if (p.reticle) this.scene.remove(p.reticle);
+        this.projectiles.splice(i, 1);
+        continue;
+      }
 
       // home in on the target's lane
       if (p.target && p.target.alive) {
@@ -417,6 +622,21 @@ export class ItemField {
       this.vfx.trail(p.mesh.position, _v.clone().multiplyScalar(-8),
         p.kind === 'bonk' ? 0x2be0c0 : 0xff8a2b, 0.4);
 
+      // keep the lock on marker over whoever it is chasing
+      if (p.reticle) {
+        const tgt = p.target && p.target.alive ? p.target : null;
+        p.reticle.visible = !!tgt;
+        if (tgt) {
+          p.reticle.position.copy(tgt.group.position);
+          p.reticle.position.y += (tgt.group.userData.height || 2.2) + 2.4;
+          p.reticle.lookAt(this.camera ? this.camera.position : p.mesh.position);
+          p.reticle.rotateZ(p.age * 2.6);
+          const closing = Math.max(0, Math.min(1, 1 - Math.abs(tgt.t - p.t) * tr.length / 240));
+          p.reticle.scale.setScalar(1 + (1 - closing) * 0.9);
+          p.reticle.children.forEach(c => { c.material.opacity = 0.45 + closing * 0.5; });
+        }
+      }
+
       // contact
       let done = false;
       for (const r of pack.racers) {
@@ -430,11 +650,15 @@ export class ItemField {
         this.vfx.burst(p.mesh.position, 30, p.kind === 'bonk' ? 0x2be0c0 : 0xff8a2b);
         this.audio && this.audio.impact(1.2);
         player.punts++;
-        if (hooks.onHitRelative) hooks.onHitRelative(r, p.kind);
+        if (hooks.onHitRelative) hooks.onHitRelative(r, p.kind, p.owner);
         done = true;
         break;
       }
-      if (done) { this.scene.remove(p.mesh); this.projectiles.splice(i, 1); }
+      if (done) {
+        this.scene.remove(p.mesh);
+        if (p.reticle) this.scene.remove(p.reticle);
+        this.projectiles.splice(i, 1);
+      }
     }
   }
 }

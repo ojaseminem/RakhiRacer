@@ -18,6 +18,15 @@ import { audio } from '../audio/audio.js';
 
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
 
+
+// The feed reads best when the colour is the person's own colour, so a glance
+// tells you who without reading the name.
+const hex = (c) => '#' + c.toString(16).padStart(6, '0');
+
+const GLYPH = { banana: 'B', slick: 'G', bazooka: 'Z', bonk: 'K', thread: 'T', thunder: '!' };
+const VERB  = { banana: 'spun out', slick: 'slid off line', bazooka: 'chappal-ed',
+                bonk: 'bonked', thread: 'tangled', thunder: 'shaken' };
+
 export class Race {
   constructor(ctx) {
     Object.assign(this, ctx);   // scene, track, camera, director, hud, vfx, post, env
@@ -27,7 +36,7 @@ export class Race {
     this.player = null;
     this.pack = new Pack(this.scene, this.track, 92);
     this.pack.buildPlates(document.getElementById('namelayer'));
-    this.items = new ItemField(this.scene, this.track, this.vfx, audio);
+    this.items = new ItemField(this.scene, this.track, this.vfx, audio, this.camera);
     this.boss = new Boss(this.scene, this.track, this.vfx, audio);
     this.beats = [];
     this.reverse = false;
@@ -166,6 +175,7 @@ export class Race {
     this.scene.add(this.player.group);
     this.director.configure(spec);
     this.hud.setVehicle(spec);
+    this.hud.clearFeed();
     this.hud.setItem(null);
 
     this.player.t = 0.0002;
@@ -395,27 +405,35 @@ export class Race {
         D.freeze(big ? 0.07 : 0.03);
         this.vfx.burst(r.group.position, big ? 30 : 14, r.def.color);
         if (big) H.shout('PUNTED', 0.9);
+        H.event(big ? '!' : '>', r.def.title, big ? 'punted off the line by you' : 'shoved aside by you', hex(r.def.color));
       },
-      onBump: (r) => { audio.impact(0.7); D.addShake(0.3); this.vfx.sparks(r.group.position, 10, 0xffd23d); },
+      onBump: (r) => {
+        audio.impact(0.7); D.addShake(0.3);
+        this.vfx.sparks(r.group.position, 10, 0xffd23d);
+        H.event('>', r.def.title, 'traded paint with you', hex(r.def.color));
+      },
       onBark: (r, text) => this.showBark(r, text),
       onDuelStart: (r) => {
         H.duel(r.def.title, '#' + r.def.color.toString(16).padStart(6, '0'), r.def.note);
         audio.duelIn();
       },
       onDuelWon: (r) => {
-        H.duelWon(r.def.title, '#' + r.def.color.toString(16).padStart(6, '0'));
+        H.duelWon(r.def.title, hex(r.def.color));
         audio.duelWon();
         this.showBark(r, 'ARRE!');
+        H.event('V', r.def.title, 'beaten, you are past', hex(r.def.color));
       },
       onRelativeDrop: (r) => {
         // whatever they leave behind is a real hazard she has to steer around
         const kind = Math.random() > 0.45 ? 'banana' : 'slick';
         this.items.dropFrom(r, kind);
+        H.event('B', r.def.title, kind === 'banana' ? 'dropped a banana peel' : 'spilled ghee on the road', hex(r.def.color));
       },
       onEliminate: (r, e) => this.onEliminate(r, e),
       onSurvive: (r, e) => {
         H.card(r.def.title, e.how, 3.0);
         audio.chime(2);
+        H.event('O', r.def.title, e.how, hex(r.def.color));
       }
     });
 
@@ -426,17 +444,23 @@ export class Race {
       onPickup: (it) => { H.itemHint(it); }
     });
     this.items.step(dt, P, this.pack, {
-      onHitRelative: (r, kind) => {
+      onHitRelative: (r, kind, blame) => {
         D.addShake(0.4);
         H.shout(kind === 'banana' ? 'SLIP' : kind === 'bonk' ? 'BONK' : 'HIT', 0.8);
         this.showBark(r, 'AREY!');
+        const by = blame === 'player' ? 'you' : (blame || 'somebody');
+        H.event(GLYPH[kind] || '!', r.def.title, `${VERB[kind] || 'hit'} by ${by}`, hex(r.def.color));
       },
-      onPlayerSlip: (kind) => {
+      onPlayerSlip: (kind, blame) => {
         D.addShake(0.8);
         H.flash(kind === 'banana' ? '#ffd23d' : '#ffe08a', 0.35, 380);
         H.shout(kind === 'banana' ? 'SLIP!' : 'SLIDING!', 1.0);
+        H.event(GLYPH[kind] || '!', 'YOU', `${VERB[kind] || 'hit'} by ${blame || 'the road'}`, '#ff2f6b');
       },
-      onThunder: (n) => { H.shout('THUNDER', 1.2); D.addShake(1.1); H.flash('#8f6aff', 0.5, 500); }
+      onThunder: (n) => {
+        H.shout('THUNDER', 1.2); D.addShake(1.1); H.flash('#8f6aff', 0.5, 500);
+        H.event('!', 'THUNDER CLAP', `${n} of them spun out`, '#8f6aff');
+      }
     });
 
     // ---- the boss ----
@@ -546,6 +570,7 @@ export class Race {
     D.addShake(0.55);
     this.vfx.debris(r.group.position, 26, r.def.color, 20);
     this.vfx.dust(r.group.position, 18, 0xffffff, 8);
+    H.event('X', r.def.title, e.how, hex(r.def.color));
 
     if (e.rival) {
       setTimeout(() => {
@@ -601,11 +626,11 @@ export class Race {
     // straight up first, then out over the knot. going diagonally would fly the
     // camera through half the forest on the way.
     const p0 = this.player.worldPos(new THREE.Vector3()).add(new THREE.Vector3(0, 10, -34));
-    const p1 = p0.clone().setY(2600);
-    const p2 = new THREE.Vector3(-1950, 11200, 4600);
+    const p1 = p0.clone().setY(1950);
+    const p2 = new THREE.Vector3(-1462, 8400, 3450);
     const look0 = this.player.worldPos(new THREE.Vector3());
     const look1 = p0.clone().setY(0);
-    const centre = new THREE.Vector3(-1950, -300, -60);
+    const centre = new THREE.Vector3(-1462, -225, -45);
 
     const mesh = this.revealMesh;
     const glow = this.heartGlow;

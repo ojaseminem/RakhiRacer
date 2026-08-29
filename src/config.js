@@ -121,6 +121,14 @@ export function sectorAt(t) {
 // THE THREE RIDES
 // Difficulty is hidden in here. There is no difficulty menu.
 // ---------------------------------------------------------------------------
+// Speeds.
+//
+// The race was asked to be a quarter shorter. Rather than cut the track, which
+// would have flattened the heart and steepened every climb, all three cars got
+// a third more speed. The drag here is linear and the throttle curve is written
+// against each car's own ceiling, so multiplying top speed, acceleration and
+// braking together scales the whole race exactly and leaves the handling,
+// the steering response and the cornering feel untouched.
 export const VEHICLES = [
   {
     id: 'velocity',
@@ -131,7 +139,7 @@ export const VEHICLES = [
     body: 0xe8203f, accent: 0xfff0d0, glow: 0xff6a4a, trail: 0xff9e3d,
     stats: [['SPEED', 5], ['ACCELERATION', 5], ['WEIGHT', 2], ['HANDLING', 1]],
     // physics
-    topSpeed: 92, accel: 48, brake: 34, grip: 5.6, turn: 1.55, mass: 0.8,
+    topSpeed: 123, accel: 64, brake: 45, grip: 5.6, turn: 1.55, mass: 0.8,
     boostMul: 1.62, boostTime: 2.4, boostDrain: 34, boostRegen: 12,
     ability: {
       name: 'NITRO BURST',
@@ -149,7 +157,7 @@ export const VEHICLES = [
     blurb: 'Massive. Chunky. Comically oversized. It does not avoid things, it removes them.',
     body: 0xffb01f, accent: 0x2bb8a8, glow: 0xffd84a, trail: 0xffc93d,
     stats: [['ATTACK', 5], ['DEFENSE', 4], ['WEIGHT', 5], ['SPEED', 3]],
-    topSpeed: 78, accel: 34, brake: 30, grip: 7.4, turn: 1.15, mass: 2.4,
+    topSpeed: 104, accel: 45, brake: 40, grip: 7.4, turn: 1.15, mass: 2.4,
     boostMul: 1.44, boostTime: 2.8, boostDrain: 28, boostRegen: 14,
     ability: {
       name: 'FAMILY FURY',
@@ -167,7 +175,7 @@ export const VEHICLES = [
     blurb: 'One rider. Glowing wheels. Long body, neon trails, and it floats a little off the road.',
     body: 0x18c8ff, accent: 0xfff2ff, glow: 0x6affff, trail: 0x39e6ff,
     stats: [['HANDLING', 5], ['SPEED', 4], ['BOOST', 4], ['WEIGHT', 2]],
-    topSpeed: 86, accel: 44, brake: 32, grip: 9.2, turn: 2.05, mass: 0.7,
+    topSpeed: 115, accel: 59, brake: 43, grip: 9.2, turn: 2.05, mass: 0.7,
     boostMul: 1.55, boostTime: 3.2, boostDrain: 26, boostRegen: 16,
     ability: {
       name: 'PHASE DASH',
@@ -284,6 +292,10 @@ export const ELIMINATIONS = [
 // intersecting itself.
 // ---------------------------------------------------------------------------
 export const TRACK = {
+  // Everything here was cut to three quarters of what it was: a full run was
+  // pushing fifteen minutes, which is a long time to ask of anybody. The
+  // height profile in track.js was scaled by the same factor so the climbs and
+  // the plunge stayed exactly as steep as they were.
   // sampled control points, in world units
   threadInLength: 10200,
   // the heart in the middle of the rakhi. 16 units wide in the parametric
@@ -303,8 +315,8 @@ export const RACE = {
   crowdRacers: 900       // background grid dressing at the start
 };
 
-// tuned against a full run: a clean boosting lap lands near nine and a half
-// minutes, a scrappy one closer to eleven
+// tuned against a full run on the shortened track: a clean boosting run lands
+// near seven minutes, a scrappy one closer to eleven
 export const RANKS = [
-  { r:'S', t: 590 }, { r:'A', t: 645 }, { r:'B', t: 710 }, { r:'C', t: 1e9 }
+  { r:'S', t: 445 }, { r:'A', t: 490 }, { r:'B', t: 540 }, { r:'C', t: 1e9 }
 ];

@@ -46,6 +46,11 @@ If you would rather not use Actions, the branch method still works: Source
 | Ability | **Space** |
 | Use item | **E** |
 | Look behind (hold) | **C** or right mouse button |
+
+Holding the look key swings the camera right round behind her, and the panel at
+the top of the screen flips to the road ahead so she can still steer. Let go and
+it swings back.
+
 | Skip a cinematic | **Esc** |
 
 Gamepad works too: right trigger accelerates, left trigger brakes, left stick

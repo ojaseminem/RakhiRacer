@@ -32,7 +32,12 @@ export function buildMom() {
   const dark = makeToon({ color: 0x1c1420, rim: 0x8a6fb0, rimStrength: 0.5 });
   const steel = makeToon({ color: 0xb8b0c8, rim: 0xffffff, rimStrength: 0.9 });
 
-  const S = 5.2;                      // she is about forty metres across
+  // Scale. At the old 5.2 she was nearly eighty metres across and sat close
+  // enough that all you ever saw was one purple panel filling the screen. At
+  // 2.5 she is about thirty seven metres wide, still seven cars across, and
+  // her whole silhouette fits in frame, which is the only way a boss reads as
+  // a boss rather than as scenery falling on you.
+  const S = 2.5;
   const body = new THREE.Group();
   g.add(body);
   g.userData.body = body;
@@ -162,7 +167,7 @@ export class Boss {
 
     this.t = 0;
     this.lat = 0;
-    this.lead = 130;          // metres ahead of the player she sits
+    this.lead = 175;          // metres ahead of the player she sits
     this.phase = 0;
     this.hp = 100;
     this.active = false;
@@ -314,7 +319,7 @@ export class Boss {
       if (hooks.onPhase) hooks.onPhase(2);
     } else if (this.phase === 2 && this.hp <= 34) {
       this.phase = 3;
-      this.lead = 96;
+      this.lead = 132;
       if (hooks.onPhase) hooks.onPhase(3);
     }
 

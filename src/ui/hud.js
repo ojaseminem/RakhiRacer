@@ -16,6 +16,9 @@ export class HUD {
       itemName: $('item-name'), itemIcon: $('item-icon'),
       sectorNum: $('sector-num'), sectorName: $('sector-name'),
       pos: $('pos-num'), progressFill: $('progressfill'), progressDot: $('progressdot'),
+      progressTicks: $('progressticks'), progressPct: $('progress-pct'), progressLeft: $('progress-left'),
+      speedo: null, boostRow: $('boostrow'), spTicks: $('sp-ticks'),
+      feed: $('feed'), lookback: $('lookback'),
       card: $('card'), cardTitle: $('card-title'), cardSub: $('card-sub'),
       duel: $('duel'), duelKicker: $('duel-kicker'), duelName: $('duel-name'), duelNote: $('duel-note'),
       itemHint: $('itemhint'), insetFrame: $('inset-frame'), insetLabel: $('inset-label'),
@@ -24,11 +27,52 @@ export class HUD {
       flash: $('flash'), skiphint: $('skiphint')
     };
     const c = this.el.fill;
+    // the arc covers 402 of the circle's 515 units, which is where every
+    // dasharray in the stylesheet comes from
     this.circ = 2 * Math.PI * 82;
-    c.style.strokeDasharray = `${this.circ}`;
-    c.style.strokeDashoffset = `${this.circ}`;
+    this.sweep = 402;
+    // driven by the dash length alone. Using dashoffset for this is the usual
+    // trick and it fought the wrap-around on a path shorter than the pattern,
+    // so the arc only ever showed a stub.
+    c.style.strokeDashoffset = '0';
+    c.style.strokeDasharray = `0 ${this.circ * 2}`;
+    this.el.speedo = c.closest('.speedo');
     this._lastSector = null;
+    this._redline = false;
     this.barks = [];
+    this.feedRows = [];
+    this.buildTicks();
+  }
+
+  // ---- the dial's tick marks ---------------------------------------------
+  // Drawn once. Eleven of them across the sweep, every other one long, which is
+  // what turns a glowing arc into something you can actually read a speed off.
+  buildTicks() {
+    const g = this.el.spTicks;
+    if (!g) return;
+    const START = -0.5, SPAN = (402 / 515) * Math.PI * 2;   // matches the arc
+    let out = '';
+    for (let i = 0; i <= 10; i++) {
+      const a = START + (i / 10) * SPAN;
+      const major = i % 2 === 0;
+      const r0 = major ? 68 : 72, r1 = 76;
+      out += `<line class="${major ? 'major' : ''}" x1="${(100 + Math.cos(a) * r0).toFixed(1)}"`
+           + ` y1="${(100 + Math.sin(a) * r0).toFixed(1)}"`
+           + ` x2="${(100 + Math.cos(a) * r1).toFixed(1)}"`
+           + ` y2="${(100 + Math.sin(a) * r1).toFixed(1)}"/>`;
+    }
+    g.innerHTML = out;
+  }
+
+  // ---- sector ticks on the progress line ---------------------------------
+  setSectors(sectors, trackLength) {
+    this.trackLength = trackLength || 0;
+    const el = this.el.progressTicks;
+    if (!el || !sectors) return;
+    el.innerHTML = sectors
+      .filter(sec => sec.from > 0)
+      .map(sec => `<i style="left:${(sec.from * 100).toFixed(2)}%"></i>`)
+      .join('');
   }
 
   setVehicle(spec) {
@@ -41,26 +85,83 @@ export class HUD {
   update(p, raceTime, sector) {
     const e = this.el;
     e.speed.textContent = p.worldSpeedKmh;
-    const k = Math.min(1, p.speed / (p.spec.topSpeed * p.spec.boostMul));
-    e.fill.style.strokeDashoffset = `${this.circ * (1 - k * 0.78)}`;
+
+    // the needle runs the full sweep, so flat out actually looks flat out
+    // scaled a little past the car's own top speed rather than its boosted
+    // ceiling, so ordinary driving uses most of the sweep and a boost is what
+    // pushes the needle into the red
+    const k = Math.min(1, p.speed / (p.spec.topSpeed * 1.12));
+    e.fill.style.strokeDasharray = `${(this.sweep * k).toFixed(1)} ${this.circ * 2}`;
+    // redline against the car's own top speed, not its boosted ceiling, so it
+    // actually lights up during normal flat out driving
+    const red = p.speed > p.spec.topSpeed * 0.96;
+    if (red !== this._redline) {
+      this._redline = red;
+      if (e.speedo) e.speedo.classList.toggle('redline', red);
+    }
+
     e.timer.textContent = fmt(raceTime);
+
     e.boost.style.width = p.boost + '%';
-    e.boostLabel.classList.toggle('hot', p.boosting);
+    e.boostRow.classList.toggle('full', p.boost > 99 && !p.boosting);
+    e.boostRow.classList.toggle('hot', !!p.boosting);
 
     const ready = p.abilityCool <= 0;
-    e.abilityFill.style.height = ready ? '100%' : `${(1 - p.abilityCool / p.spec.ability.cool) * 100}%`;
+    e.abilityFill.style.width = ready ? '100%' : `${(1 - p.abilityCool / p.spec.ability.cool) * 100}%`;
     e.abilityFill.parentElement.parentElement.classList.toggle('ready', ready);
     e.abilityFill.parentElement.parentElement.classList.toggle('active', p.abilityActive);
 
-    const pct = Math.min(100, p.t * 100);
-    e.progressFill.style.width = pct + '%';
-    e.progressDot.style.left = pct + '%';
+    const pct = Math.min(100, Math.max(0, p.t * 100));
+    e.progressFill.style.width = pct.toFixed(2) + '%';
+    e.progressDot.style.left = pct.toFixed(2) + '%';
+    if (e.progressPct) e.progressPct.textContent = Math.round(pct) + '%';
+    if (e.progressLeft && this.trackLength) {
+      const km = (this.trackLength * (1 - p.t)) / 1000;
+      e.progressLeft.textContent = km >= 1
+        ? km.toFixed(1) + ' KM TO GO'
+        : Math.round(km * 1000) + ' M TO GO';
+    }
 
     if (sector !== this._lastSector) {
       this._lastSector = sector;
       e.sectorNum.textContent = sector.num;
       e.sectorName.textContent = sector.name;
     }
+  }
+
+  // ---- the running feed ---------------------------------------------------
+  // Everything that happens to somebody goes through here: spins, hits,
+  // eliminations. Without it half the chaos happens off screen behind her.
+  event(glyph, who, what, color = '#ffc93d') {
+    const layer = this.el.feed;
+    if (!layer) return;
+    const row = document.createElement('div');
+    row.className = 'feed-row';
+    row.style.setProperty('--fc', color);
+    row.innerHTML = `<span class="feed-glyph">${glyph}</span><b>${who}</b><i>${what}</i>`;
+    layer.appendChild(row);
+    this.feedRows.push(row);
+    while (this.feedRows.length > 5) this.retireFeedRow(this.feedRows.shift());
+    setTimeout(() => {
+      const i = this.feedRows.indexOf(row);
+      if (i >= 0) { this.feedRows.splice(i, 1); this.retireFeedRow(row); }
+    }, 5200);
+  }
+
+  retireFeedRow(row) {
+    if (!row) return;
+    row.classList.add('out');
+    setTimeout(() => row.remove(), 500);
+  }
+
+  clearFeed() {
+    this.feedRows.forEach(r => r.remove());
+    this.feedRows = [];
+    if (this.el.feed) this.el.feed.innerHTML = '';
+  }
+
+  lookingBack(on) {
+    if (this.el.lookback) this.el.lookback.classList.toggle('show', !!on);
   }
 
   setPosition(pos, total) {

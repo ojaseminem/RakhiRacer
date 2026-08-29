@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SECTORS, VEHICLES, sectorAt } from './config.js';
+import { SECTORS, VEHICLES, TRACK, sectorAt } from './config.js';
 import { Track, buildRoadMesh, buildBarriers } from './world/track.js';
 import { makeToon, makeSky, blendSector, syncLighting } from './art/materials.js';
 import { HERO_BUILDERS } from './art/build.js';
@@ -127,30 +127,41 @@ const post = makePost(renderer, scene, camera);
 const insetCam = new THREE.PerspectiveCamera(58, 16 / 9, 0.5, 12000);
 const _ip = new THREE.Vector3(), _il = new THREE.Vector3();
 
+// Holding the look key swings the whole camera round behind her, the same way
+// the cinematic does, rather than opening a little window somewhere. The inset
+// then flips to the road ahead so she can still steer. Releasing swings back.
+// A small panel in the corner was never going to read as "looking back".
+let lookHeld = false;
+
+function updateLookBack(dt) {
+  const racing = State === 'hud' && race.state === 'racing';
+  const want = racing && Input.look && !race.reverse;
+  if (want !== lookHeld) {
+    lookHeld = want;
+    // fast enough that the swing feels like a head turn, not a broken camera
+    if (!race.reverse) director.setReverse(want, 7.0);
+  }
+  return lookHeld;
+}
+
 function updateInset(dt) {
   const P = race.player;
   if (!P || !P.group.visible) return null;
   const racing = State === 'hud' || State === 'none';
   if (!racing || race.state === 'reveal') return null;
 
-  const rear = !race.reverse && Input.look;
-  const front = race.reverse;
-  if (!rear && !front) return null;
+  // whenever the main camera is facing backwards, for whatever reason, the
+  // inset carries the road ahead
+  const facingBack = race.reverse || lookHeld;
+  if (!facingBack) return null;
 
   const L = track.length;
-  if (rear) {
-    // sit a little in front of her, looking back down the road past her roof
-    track.posAt(Math.min(1, P.t + 11 / L), P.lat * 0.8, 4.2, _ip);
-    track.posAt(Math.max(0, P.t - 46 / L), P.lat * 0.4, 2.4, _il);
-  } else {
-    // sit behind her, looking the way she is actually going
-    track.posAt(Math.max(0, P.t - 12 / L), P.lat * 0.8, 4.4, _ip);
-    track.posAt(Math.min(1, P.t + 70 / L), P.lat * 0.4, 3.0, _il);
-  }
+  track.posAt(Math.max(0, P.t - 12 / L), P.lat * 0.8, 4.4, _ip);
+  track.posAt(Math.min(1, P.t + 70 / L), P.lat * 0.4, 3.0, _il);
   insetCam.position.copy(_ip);
   insetCam.up.set(0, 1, 0);
   insetCam.lookAt(_il);
-  return rear ? 'LOOKING BACK' : 'THE ROAD AHEAD';
+  return 'THE ROAD AHEAD';
 }
 
 function renderInset() {
@@ -171,6 +182,7 @@ function renderInset() {
   renderer.autoClear = true;
 }
 const hud = new HUD();
+hud.setSectors(SECTORS, track.length);
 const director = new Director(camera, track);
 
 setStatus('waking the family');
@@ -314,8 +326,7 @@ function clearWorldForEnding() {
   race.finishGate.visible = false;
   race.boss.group.visible = false;
   for (const r of race.pack.racers) r.group.visible = false;
-  race.items.mesh.visible = false;
-  race.items.core.visible = false;
+  race.items.setVisible(false);
   scene.fog.near = 60; scene.fog.far = 900;
   scene.fog.color.setHex(0x1a0f26);
   const sk = sky.material.uniforms;
@@ -333,8 +344,7 @@ function restoreWorld() {
   }
   road.visible = true;
   barriers.visible = true;
-  race.items.mesh.visible = true;
-  race.items.core.visible = true;
+  race.items.setVisible(true);
   for (const r of race.pack.racers) r.group.visible = true;
   sun.intensity = 1.55;
 }
@@ -577,8 +587,10 @@ function frame(now) {
   vfx.update(dt);
   post.render(dt);
 
+  const looking = updateLookBack(dt);
   const insetLabel = updateInset(dt);
   hud.inset(!!insetLabel, insetLabel || undefined);
+  hud.lookingBack(looking);
   if (insetLabel) renderInset();
 
   Input.clearAny();
@@ -623,4 +635,4 @@ if (DEV) {
 
 requestAnimationFrame(frame);
 
-window.RAKHI = { scene, camera, track, director, post, race, vfx, audio, playEnding, startRace, setScreen, rakhiScene, clearWorldForEnding, playRakhiScene, hud };
+window.RAKHI = { TRACKCFG: TRACK, scene, camera, track, director, post, race, vfx, audio, playEnding, startRace, setScreen, rakhiScene, clearWorldForEnding, playRakhiScene, hud, Input };

@@ -77,20 +77,43 @@
 
   <div class="hud-tr">
     <div class="timer" id="timer">0:00.00</div>
-    <div class="progressline"><div id="progressfill"></div><div id="progressdot"></div></div>
+    <div class="progresswrap">
+      <div class="progressline">
+        <div id="progressticks"></div>
+        <div id="progressfill"></div>
+        <div id="progressdot"></div>
+      </div>
+      <div class="progressmeta">
+        <span id="progress-pct">0%</span>
+        <span id="progress-left">41.9 km to go</span>
+      </div>
+    </div>
+    <div class="feed" id="feed"></div>
   </div>
 
   <div class="hud-br">
-    <div class="speedo">
-      <svg viewBox="0 0 200 200" class="speedo-svg">
-        <circle class="sp-track" cx="100" cy="100" r="82"/>
-        <circle class="sp-fill" id="sp-fill" cx="100" cy="100" r="82"/>
-      </svg>
-      <div class="sp-read"><span id="speed-num">0</span><span class="sp-unit">KM/H</span></div>
-    </div>
-    <div class="boostwrap">
-      <div class="boostbar"><div id="boostfill"></div></div>
-      <span class="boostlabel" id="boostlabel">BOOST</span>
+    <div class="dial">
+      <div class="speedo">
+        <svg viewBox="0 0 200 200" class="speedo-svg">
+          <circle class="sp-shadow" cx="100" cy="100" r="82"/>
+          <circle class="sp-track" cx="100" cy="100" r="82"/>
+          <circle class="sp-red"   cx="100" cy="100" r="82"/>
+          <circle class="sp-fill" id="sp-fill" cx="100" cy="100" r="82"/>
+          <g id="sp-ticks" class="sp-ticks"></g>
+        </svg>
+        <div class="sp-read">
+          <span id="speed-num">0</span>
+          <span class="sp-unit">KM/H</span>
+        </div>
+      </div>
+      <div class="boostrow" id="boostrow">
+        <span class="boostlabel" id="boostlabel">BOOST</span>
+        <div class="boostbar" id="boostbar">
+          <div id="boostfill"></div>
+          <div class="boostsegs"></div>
+        </div>
+        <span class="boostkey">SHIFT</span>
+      </div>
     </div>
   </div>
 
@@ -103,8 +126,8 @@
       <div class="itemslot-key">E</div>
     </div>
     <div class="ability" id="ability">
-      <div class="ability-ring"><div id="ability-fill"></div></div>
       <div class="ability-txt"><b id="ability-name">NITRO BURST</b><span>SPACE</span></div>
+      <div class="ability-ring"><div id="ability-fill"></div></div>
     </div>
   </div>
 
@@ -114,7 +137,8 @@
     <span class="duel-note" id="duel-note"></span>
   </div>
   <div class="itemhint" id="itemhint"></div>
-  <div class="inset-frame" id="inset-frame"><span id="inset-label">LOOKING BACK</span></div>
+  <div class="inset-frame" id="inset-frame"><span id="inset-label">THE ROAD AHEAD</span></div>
+  <div class="lookback" id="lookback"><span></span>LOOKING BACK<span></span></div>
   <div class="hud-lap" id="lapbanner"></div>
   <div class="hud-bark-layer" id="barklayer"></div>
   <div class="hud-name-layer" id="namelayer"></div>

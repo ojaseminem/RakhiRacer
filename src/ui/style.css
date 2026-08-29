@@ -55,7 +55,11 @@ html, body {
   cursor: default;
 }
 
-#stage { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+/* The canvas is pinned to its own layer at the bottom. Without an explicit
+   z-index here, Chromium was free to composite freshly promoted HUD layers
+   behind the WebGL layer, and the speed arc and boost bar simply vanished
+   whenever the 3D was on screen. */
+#stage { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; }
 
 /* --- global overlays ------------------------------------------------------ */
 #flash {
@@ -265,9 +269,13 @@ html, body {
    =========================================================================== */
 .hud > div { position: absolute; }
 .hud-tl { top: 26px; left: 30px; display: flex; gap: 12px; align-items: stretch; }
-.hud-tr { top: 26px; right: 30px; text-align: right; }
+.hud-tr {
+  top: 26px; right: 30px; text-align: right;
+  padding: 10px 14px 12px; margin: -10px -14px -12px;
+  background: linear-gradient(200deg, rgba(10,7,16,.52), rgba(10,7,16,0) 72%);
+}
 .hud-br { bottom: 26px; right: 30px; display: flex; align-items: flex-end; gap: 16px; }
-.hud-bl { bottom: 26px; left: 30px; display: flex; align-items: flex-end; gap: 14px; }
+.hud-bl { bottom: 26px; left: 30px; display: flex; align-items: flex-end; gap: 18px; }
 
 .sector-chip {
   display: flex; align-items: center; gap: 12px;
@@ -295,90 +303,209 @@ html, body {
   letter-spacing: .04em; font-variant-numeric: tabular-nums;
   text-shadow: 0 3px 0 rgba(0,0,0,.5);
 }
+/* progress along the track, with a tick where each sector starts */
+.progresswrap { width: clamp(200px, 22vw, 330px); margin-left: auto; margin-top: 10px; }
 .progressline {
-  position: relative; width: clamp(180px, 20vw, 300px); height: 4px;
-  margin-top: 10px; margin-left: auto; background: rgba(255,246,234,.18);
+  position: relative; width: 100%; height: 9px;
+  background: rgba(10,7,16,.66);
+  box-shadow: inset 0 0 0 1px rgba(255,246,234,.16);
+  clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%);
 }
-#progressfill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--gold)); }
+#progressfill {
+  height: 100%; width: 0;
+  background: linear-gradient(90deg, var(--cyan), var(--gold));
+  box-shadow: 0 0 10px rgba(255,201,61,.55);
+}
+#progressticks { position: absolute; inset: 0; pointer-events: none; }
+#progressticks i {
+  position: absolute; top: 0; bottom: 0; width: 1px;
+  background: rgba(255,246,234,.42);
+}
 #progressdot {
-  position: absolute; top: 50%; width: 12px; height: 12px; background: var(--paper);
+  position: absolute; top: 50%; left: 0; width: 13px; height: 13px;
+  background: var(--paper);
   transform: translate(-50%, -50%) rotate(45deg);
   box-shadow: 0 0 12px var(--gold);
 }
-
-/* speedo */
-.speedo { position: relative; width: clamp(112px, 11vw, 168px); aspect-ratio: 1; }
-.speedo-svg { width: 100%; height: 100%; transform: rotate(138deg); overflow: visible; }
-.sp-track, .sp-fill { fill: none; stroke-width: 9; stroke-linecap: butt; }
-.sp-track { stroke: rgba(10,7,16,.6); stroke-dasharray: 402 515; }
-.sp-fill {
-  stroke: var(--ride-glow); transition: stroke-dashoffset .08s linear;
-  filter: drop-shadow(0 0 8px var(--ride-glow));
+.progressmeta {
+  display: flex; justify-content: space-between; margin-top: 5px;
+  font-family: var(--sign); font-size: 9.5px; letter-spacing: .16em;
+  opacity: .58;
 }
+#progress-pct { color: var(--gold); opacity: .9; }
+
+/* the running feed of what just happened to whom */
+.feed {
+  margin-top: 14px; margin-left: auto;
+  width: clamp(200px, 22vw, 330px);
+  display: flex; flex-direction: column; align-items: flex-end; gap: 5px;
+}
+.feed-row {
+  max-width: 100%;
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 10px 5px 8px;
+  background: rgba(10,7,16,.72);
+  border-right: 3px solid var(--fc, var(--gold));
+  font-size: 10.5px; font-weight: 600; letter-spacing: .04em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  /* No entrance animation and no transition. Both promote the row to its own
+     composited layer, and a promoted layer lands behind the WebGL canvas. */
+  opacity: 1;
+}
+.feed-row.out { opacity: .0; }
+.feed-row b { color: var(--fc, var(--gold)); font-family: var(--sign); letter-spacing: .1em; font-size: 10px; }
+.feed-row i { font-style: normal; opacity: .62; }
+.feed-glyph {
+  width: 16px; height: 16px; flex: 0 0 16px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--fc, var(--gold)); color: #17040e;
+  font-family: var(--disp); font-size: 10px; line-height: 1;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+
+/* ===========================================================================
+   SPEED DIAL
+   A dark plate behind the arc so the numbers survive a bright sky, ticks so
+   the sweep reads as a scale rather than a glow, and a red section at the top
+   end so flat out looks like flat out.
+   =========================================================================== */
+.dial { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.speedo { position: relative; width: clamp(126px, 12vw, 182px); aspect-ratio: 1; isolation: isolate; }
+.speedo-svg { width: 100%; height: 100%; transform: rotate(138deg); overflow: visible; }
+.sp-shadow, .sp-track, .sp-fill, .sp-red { fill: none; stroke-linecap: butt; }
+.sp-shadow { stroke: rgba(8,5,14,.72); stroke-width: 34; stroke-dasharray: 402 515; }
+.sp-track  { stroke: rgba(255,246,234,.20); stroke-width: 13; stroke-dasharray: 402 515; }
+/* the last fifth of the sweep, sitting under the fill */
+.sp-red    { stroke: rgba(255,58,74,.55); stroke-width: 13; stroke-dasharray: 72 515; stroke-dashoffset: -330px; }
+.sp-fill {
+  stroke: var(--ride-glow); stroke-width: 13;
+  transition: stroke .25s linear;
+}
+/* A drop-shadow filter on this circle blanks it out entirely in Chrome: the
+   element has no fill, so the filter region collapses and nothing is painted.
+   The glow lives on the plate behind it instead. */
+.speedo::before {
+  content: ''; position: absolute; inset: 14%;
+  border-radius: 50%; pointer-events: none; z-index: -1;
+  box-shadow: 0 0 26px 3px var(--ride-glow);
+  opacity: .18; transition: opacity .25s, box-shadow .25s;
+}
+.speedo.redline .sp-fill { stroke: #ff5a4a; }
+.speedo.redline::before { box-shadow: 0 0 34px 5px #ff5a4a; opacity: .36; }
+.sp-ticks line { stroke: rgba(255,246,234,.5); stroke-width: 2; }
+.sp-ticks line.major { stroke: rgba(255,246,234,.85); stroke-width: 3; }
+
 .sp-read {
   position: absolute; inset: 0; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 0;
 }
 #speed-num {
-  font-family: var(--ui); font-weight: 700; font-size: clamp(30px, 3.2vw, 52px);
-  line-height: .9; font-variant-numeric: tabular-nums;
-  text-shadow: 0 3px 0 rgba(0,0,0,.55);
+  font-family: var(--ui); font-weight: 800; font-size: clamp(34px, 3.6vw, 58px);
+  line-height: .88; font-variant-numeric: tabular-nums;
+  text-shadow: 0 3px 0 rgba(0,0,0,.6);
 }
-.sp-unit { font-size: 10px; letter-spacing: .3em; opacity: .55; margin-top: 2px; }
+.speedo.redline #speed-num { color: #ffb0a4; }
+.sp-unit {
+  font-family: var(--sign); font-size: 9.5px; letter-spacing: .3em;
+  opacity: .6; margin-top: 3px;
+}
 
-/* boost */
-.boostwrap { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding-bottom: 12px; }
+/* ---- boost, as a segmented bar under the dial ---------------------------- */
+.boostrow {
+  display: flex; align-items: center; gap: 9px;
+  width: clamp(150px, 14vw, 212px);
+}
+.boostlabel, .boostkey {
+  font-family: var(--sign); font-size: 9px; letter-spacing: .16em; opacity: .5;
+}
+.boostkey { opacity: .32; }
 .boostbar {
-  width: 16px; height: clamp(80px, 9vw, 132px);
-  background: rgba(10,7,16,.6); display: flex; align-items: flex-end;
-  clip-path: polygon(0 8px, 8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+  position: relative; flex: 1; height: 13px;
+  background: rgba(10,7,16,.72);
+  box-shadow: inset 0 0 0 1px rgba(255,246,234,.16);
+  clip-path: polygon(4px 0, 100% 0, calc(100% - 4px) 100%, 0 100%);
+  overflow: hidden;
 }
 #boostfill {
-  width: 100%; height: 100%;
-  background: linear-gradient(0deg, var(--cyan), var(--gold) 60%, #fff);
-  transition: height .08s linear;
+  height: 100%; width: 0;
+  background: linear-gradient(90deg, var(--cyan), var(--gold) 72%, #fff);
 }
-.boostlabel {
-  font-family: var(--sign); font-size: 9px; letter-spacing: .18em;
-  writing-mode: vertical-rl; opacity: .5;
+/* the notches are painted over the fill so it reads as cells filling up */
+.boostsegs {
+  position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(90deg,
+    transparent 0 calc(20% - 2px), rgba(10,7,16,.85) calc(20% - 2px) 20%);
 }
-.boostlabel.hot { opacity: 1; color: var(--gold); }
+.boostrow.full .boostlabel { opacity: 1; color: var(--gold); }
+.boostrow.full #boostfill { box-shadow: 0 0 14px rgba(255,201,61,.8); }
+.boostrow.hot .boostlabel { opacity: 1; color: #fff; }
+.boostrow.hot #boostfill { background: linear-gradient(90deg, var(--gold), #fff); }
+.boostrow.hot { animation: boostPulse .32s ease-in-out infinite alternate; }
+@keyframes boostPulse { to { transform: translateX(-1px); } }
 
-/* item slot */
+/* ---------------------------------------------------------------------------
+   ITEM AND ABILITY
+   Two panels of the same weight as the dial opposite them, so the bottom of
+   the screen reads as one bar rather than four unrelated widgets.
+   --------------------------------------------------------------------------- */
 .itemslot {
-  position: relative; width: clamp(88px, 8.5vw, 120px); aspect-ratio: 1;
-  background: rgba(10,7,16,.6); clip-path: var(--cut-sm);
-  outline: 2px dashed rgba(255,246,234,.2); outline-offset: -6px;
+  position: relative; width: clamp(96px, 9vw, 128px); aspect-ratio: 1;
+  background: rgba(10,7,16,.72);
+  box-shadow: inset 0 0 0 1px rgba(255,246,234,.14);
+  clip-path: var(--cut-sm);
   display: flex; align-items: center; justify-content: center;
+  transition: box-shadow .2s;
 }
-.itemslot.has { outline-style: solid; outline-color: var(--gold); }
-.itemslot-inner { text-align: center; padding: 8px; }
+.itemslot::before {
+  content: ''; position: absolute; inset: 7px;
+  border: 2px dashed rgba(255,246,234,.16);
+  transition: border-color .2s, border-style .2s;
+}
+.itemslot.has { box-shadow: inset 0 0 0 2px var(--gold), 0 0 22px rgba(255,201,61,.34); }
+.itemslot.has::before { border-style: solid; border-color: rgba(255,201,61,.4); }
+.itemslot-inner { text-align: center; padding: 10px; position: relative; z-index: 1; }
 .item-icon {
-  width: 34px; height: 34px; margin: 0 auto 6px; display: flex;
+  width: 40px; height: 40px; margin: 0 auto 8px; display: flex;
   align-items: center; justify-content: center;
-  font-family: var(--disp); font-size: 19px; color: #17040e;
+  font-family: var(--disp); font-size: 21px; color: #17040e;
   clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  transition: transform .2s cubic-bezier(.2,1.4,.3,1);
 }
-.item-name { font-size: 8.5px; letter-spacing: .12em; opacity: .7; line-height: 1.25; font-weight: 600; }
+.itemslot.has .item-icon { animation: itemPop .34s cubic-bezier(.2,1.5,.3,1); }
+@keyframes itemPop { 0% { transform: scale(.4) rotate(-25deg); } 100% { transform: scale(1); } }
+.item-name {
+  font-family: var(--sign); font-size: 8.5px; letter-spacing: .12em;
+  opacity: .62; line-height: 1.35;
+}
+.itemslot.has .item-name { opacity: 1; }
 .itemslot-key {
-  position: absolute; bottom: -8px; right: -8px; width: 24px; height: 24px;
+  position: absolute; bottom: -8px; right: -8px; width: 26px; height: 26px;
   background: var(--paper); color: var(--ink); font-size: 11px; font-weight: 700;
   display: flex; align-items: center; justify-content: center; clip-path: var(--cut-sm);
 }
+.itemslot.has .itemslot-key { background: var(--gold); }
 
-/* ability */
-.ability { display: flex; align-items: flex-end; gap: 10px; }
+/* ability, matching the boost bar's shape so the pair reads as a set */
+.ability { display: flex; flex-direction: column; gap: 7px; padding-bottom: 10px; }
 .ability-ring {
-  width: 14px; height: clamp(56px, 6vw, 84px); background: rgba(10,7,16,.6);
-  display: flex; align-items: flex-end; clip-path: var(--cut-sm);
+  width: clamp(120px, 11vw, 168px); height: 13px;
+  background: rgba(10,7,16,.72);
+  box-shadow: inset 0 0 0 1px rgba(255,246,234,.16);
+  clip-path: polygon(4px 0, 100% 0, calc(100% - 4px) 100%, 0 100%);
+  display: flex; align-items: stretch;
 }
-#ability-fill { width: 100%; background: rgba(255,246,234,.3); transition: height .1s linear; }
-.ability.ready #ability-fill { background: linear-gradient(0deg, var(--violet), var(--cyan)); }
-.ability.active #ability-fill { background: linear-gradient(0deg, var(--gold), #fff); }
-.ability-txt { padding-bottom: 4px; }
-.ability-txt b { display: block; font-family: var(--sign); font-size: 10px; letter-spacing: .14em; opacity: .5; }
+#ability-fill {
+  height: 100% !important; width: 0;
+  background: rgba(255,246,234,.28);
+}
+.ability.ready #ability-fill { background: linear-gradient(90deg, var(--violet), var(--cyan)); box-shadow: 0 0 14px rgba(43,224,192,.6); }
+.ability.active #ability-fill { background: linear-gradient(90deg, var(--gold), #fff); }
+.ability-txt { display: flex; align-items: baseline; gap: 8px; }
+.ability-txt b {
+  font-family: var(--sign); font-size: 10px; letter-spacing: .14em; opacity: .5;
+}
 .ability.ready .ability-txt b { opacity: 1; color: var(--cyan); }
-.ability-txt span { font-size: 9px; letter-spacing: .22em; opacity: .4; }
+.ability-txt span { font-family: var(--sign); font-size: 9px; letter-spacing: .22em; opacity: .32; }
 
 /* ===========================================================================
    CINEMATIC OVERLAYS
@@ -642,29 +769,52 @@ html, body {
 }
 
 /* ===========================================================================
-   REAR VIEW INSET
-   The 3D is drawn straight into a viewport by the renderer. This is only the
-   frame and the label around it.
+   THE FORWARD INSET AND THE LOOK BACK BADGE
+   Holding the look key turns the main camera round. This panel then carries
+   the road ahead so she can still steer, and the badge says plainly what is
+   happening, because a camera that turns round on its own reads as a bug.
    =========================================================================== */
 .inset-frame {
-  position: absolute; left: 50%; top: 24px;
-  width: 26vw; aspect-ratio: 16 / 9;
+  position: absolute; left: 50%; top: 26px;
+  width: clamp(240px, 27vw, 460px); aspect-ratio: 16 / 9;
   transform: translateX(-50%) scale(.96);
   opacity: 0; pointer-events: none;
-  outline: 2px solid rgba(255,246,234,.5); outline-offset: 0;
-  box-shadow: 0 12px 40px rgba(0,0,0,.55);
-  transition: opacity .18s, transform .22s cubic-bezier(.2,1.2,.3,1);
+  box-shadow: inset 0 0 0 2px rgba(255,246,234,.62), 0 14px 44px rgba(0,0,0,.6);
+  transition: opacity .16s, transform .2s cubic-bezier(.2,1.2,.3,1);
 }
 .inset-frame.show { opacity: 1; transform: translateX(-50%) scale(1); }
 .inset-frame::before,
 .inset-frame::after {
-  content: ''; position: absolute; width: 14px; height: 14px;
+  content: ''; position: absolute; width: 16px; height: 16px;
   border: 3px solid var(--gold);
 }
-.inset-frame::before { left: -3px; top: -3px; border-right: 0; border-bottom: 0; }
-.inset-frame::after { right: -3px; bottom: -3px; border-left: 0; border-top: 0; }
+.inset-frame::before { left: -2px; top: -2px; border-right: 0; border-bottom: 0; }
+.inset-frame::after { right: -2px; bottom: -2px; border-left: 0; border-top: 0; }
 #inset-label {
-  position: absolute; left: 50%; bottom: -22px; transform: translateX(-50%);
-  font-family: var(--sign); font-size: 9px; letter-spacing: .3em;
-  color: var(--gold); white-space: nowrap;
+  position: absolute; left: 0; top: 0;
+  padding: 4px 10px 3px;
+  background: var(--gold); color: #17040e;
+  font-family: var(--sign); font-size: 9px; letter-spacing: .26em;
+  white-space: nowrap;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
 }
+
+.lookback {
+  position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%) translateY(8px);
+  display: flex; align-items: center; gap: 12px;
+  padding: 7px 20px 6px;
+  background: rgba(255,58,107,.92); color: #fff;
+  font-family: var(--sign); font-size: 11px; letter-spacing: .34em;
+  clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+  opacity: 0; pointer-events: none;
+  transition: opacity .14s, transform .18s cubic-bezier(.2,1.2,.3,1);
+  box-shadow: 0 8px 28px rgba(0,0,0,.5);
+}
+.lookback.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.lookback span {
+  width: 9px; height: 9px; background: #fff;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  animation: lbBlink .7s steps(2, end) infinite;
+}
+
+@keyframes lbBlink { 50% { opacity: .25; } }

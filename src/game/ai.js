@@ -39,6 +39,7 @@ export class Relative {
     this.wheelSpin = 0;
     this.stun = 0;
     this.bumpCool = 0;
+    this.contact = false;
     this.barkCool = 2 + Math.random() * 6;
 
     // where on the road this one likes to sit
@@ -88,6 +89,14 @@ export class Relative {
       else if (gap < -25) band = 1 - Math.min(0.52, -gap / 380);
     }
 
+    // Chase. If she has pulled clear, whoever is behind her puts their head
+    // down and comes after her instead of settling into their own race. This
+    // is what stops the field quietly giving up once she is in front.
+    this.chasing = gap > 60 && !this.beaten;
+    if (this.chasing) {
+      band += Math.min(0.34, (gap - 60) / 700) * (0.7 + d.skill * 0.6);
+    }
+
     let target = this.baseSpeed * (0.84 + d.skill * 0.24) * band;
     if (this.stun > 0) target *= 0.4;
 
@@ -111,19 +120,39 @@ export class Relative {
     if (aggro > 0.3 && dt2 < 34) {
       // block the line she wants rather than just sitting in a lane
       wantLat = wantLat * (1 - aggro) + player.lat * aggro;
+    } else if (this.chasing && gap < 320) {
+      // tuck into her slipstream on the way back up to her
+      wantLat = wantLat * 0.45 + player.lat * 0.55;
     }
 
-    // keep off each other
+    // Keep off each other, and off her. The old version nudged by a fixed
+    // amount only when already overlapping, so cars ground along each other
+    // for whole sectors. This is a real separation force: it starts pushing
+    // before the cars touch and gets stronger the closer they are.
+    const CAR_W = 5.2, CAR_L = 11;
+    let push = 0;
     if (ctx && ctx.pack) {
       for (const o of ctx.pack) {
         if (o === this || !o.alive) continue;
         const dg = (o.t - this.t) * track.length;
-        if (Math.abs(dg) < 9) {
-          const dl = o.lat - this.lat;
-          if (Math.abs(dl) < 4.2) wantLat -= Math.sign(dl || 1) * 5.0;
-        }
+        if (Math.abs(dg) > CAR_L) continue;
+        const dl = o.lat - this.lat;
+        if (Math.abs(dl) > CAR_W) continue;
+        const near = 1 - Math.abs(dl) / CAR_W;
+        push -= Math.sign(dl || (Math.random() - 0.5)) * near * 7.5;
       }
     }
+    // she gets the same berth, so they stop trying to occupy her lane the
+    // moment they are alongside
+    const pg = (player.t - this.t) * track.length;
+    if (Math.abs(pg) < CAR_L) {
+      const dl = player.lat - this.lat;
+      if (Math.abs(dl) < CAR_W) {
+        const near = 1 - Math.abs(dl) / CAR_W;
+        push -= Math.sign(dl || 1) * near * 6.0;
+      }
+    }
+    wantLat += push;
 
     // the chaotic ones just do things
     this.wobble += dt * (0.7 + d.chaos * 2.2);
@@ -331,22 +360,46 @@ export class Pack {
     for (const r of this.racers) r.update(dt, player, ctx);
 
     // ---- contact with the player ----
+    //
+    // Two things were wrong with this before. Cars could sit inside each other
+    // and re-trigger the hit every time the cooldown lapsed, which is the
+    // grinding contact; and nothing ever pushed them apart, so once overlapped
+    // they stayed overlapped. Now a hit fires once on the way in, both cars get
+    // a real shove apart, and no second hit can land until they have actually
+    // separated.
+    const HIT_LONG = 5.4, HIT_LAT = 4.2, CLEAR_LAT = 5.6;
     for (const r of this.racers) {
       if (!r.alive) continue;
       const gap = (r.t - player.t) * this.track.length;
-      if (Math.abs(gap) > 5.2) continue;
       const dl = r.lat - player.lat;
-      if (Math.abs(dl) > 4.0) continue;
-      if (r.bumpCool > 0) continue;
-      r.bumpCool = 0.6;
+      const touching = Math.abs(gap) < HIT_LONG && Math.abs(dl) < HIT_LAT;
 
-      const heavy = player.spec.id === 'beast' || player.abilityActive;
+      // the flag only clears once they are properly apart, so grinding along
+      // somebody registers as one hit rather than one every cooldown
+      if (!touching) {
+        if (Math.abs(dl) > CLEAR_LAT || Math.abs(gap) > HIT_LONG * 1.6) r.contact = false;
+        continue;
+      }
+
+      const side = Math.sign(dl || (Math.random() - 0.5));
       const phasing = player.spec.id === 'comet' && player.abilityActive;
       if (phasing) continue;
 
+      // separation runs every frame they overlap, hit or no hit. This is what
+      // actually stops the two cars occupying the same piece of road.
+      const overlap = HIT_LAT - Math.abs(dl);
+      r.latVel += side * overlap * 5.0;
+      player.latVel -= side * overlap * 3.2;
+      r.lat += side * overlap * 0.28;
+
+      if (r.contact) continue;      // already counted this one
+      r.contact = true;
+      r.bumpCool = 0.9;
+
+      const heavy = player.spec.id === 'beast' || player.abilityActive;
       if (heavy) {
         // she goes through them
-        r.latVel += Math.sign(dl || 1) * 34;
+        r.latVel += side * 30;
         r.stun = 0.8;
         r.speed *= 0.6;
         player.punts++;
@@ -356,8 +409,11 @@ export class Pack {
           if (!r.def.unpushable && hooks.onPunt) hooks.onPunt(r, true);
         } else if (hooks.onPunt) hooks.onPunt(r, false);
       } else {
-        player.hit(0.8, -Math.sign(dl || 1));
-        r.latVel -= Math.sign(dl || 1) * 12;
+        // a glance, not a crash: she loses a little speed and gets moved off
+        // her line, which is a nuisance rather than a punishment
+        player.hit(0.55, -side);
+        r.latVel -= side * 10;
+        r.speed *= 0.94;
         if (hooks.onBump) hooks.onBump(r);
       }
       if (r.barkCool <= 0 && hooks.onBark) { hooks.onBark(r, r.pickBark()); r.barkCool = 5; }

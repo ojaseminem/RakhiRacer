@@ -28,6 +28,7 @@ export class Director {
 
     this.mode = 'chase';       // chase | reverse | shot | free
     this.reverseBlend = 0;
+    this.reverseRate = 1.4;
     this.shot = null;
     this.shotTime = 0;
     this.blend = 0;            // 0 = gameplay, 1 = shot
@@ -59,7 +60,10 @@ export class Director {
 
   stopShot() { this.shot = null; this.mode = 'chase'; }
 
-  setReverse(on) { this.targetReverse = on ? 1 : 0; }
+  // rate is how fast the swing happens. The cinematic wants a slow, dreadful
+  // turn; a held look-back key wants to be round there almost at once, because
+  // anything slower reads as the camera being broken rather than turning.
+  setReverse(on, rate = 1.4) { this.targetReverse = on ? 1 : 0; this.reverseRate = rate; }
 
   update(dt, player, opts = {}) {
     // hit stop is what gives impacts weight. everything freezes for a few frames.
@@ -70,7 +74,7 @@ export class Director {
       this.timeScale += (1 - this.timeScale) * Math.min(1, 10 * dt);
     }
 
-    this.reverseBlend += ((this.targetReverse || 0) - this.reverseBlend) * Math.min(1, 1.4 * dt);
+    this.reverseBlend += ((this.targetReverse || 0) - this.reverseBlend) * Math.min(1, (this.reverseRate || 1.4) * dt);
 
     if (this.shot) {
       this.shotTime += dt;
