@@ -82,8 +82,12 @@ export function buildWorld(scene, track) {
   const gBox = new RoundedBoxGeometry(1, 1, 1, 2, 0.10);
   const gBoxSharp = new THREE.BoxGeometry(1, 1, 1);
   const gCyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 10);
-  const gCone = new THREE.ConeGeometry(0.5, 1, 7);            // faceted on purpose
-  const gRock = new THREE.IcosahedronGeometry(0.5, 0);        // hard facets, not a ball
+  // MeshToonMaterial ignores flatShading, so the facets have to be baked into
+  // the geometry instead. Without this the boulders and canopies shade like
+  // smooth balloons, which is exactly what they looked like.
+  const facet = (g) => { const f = g.toNonIndexed(); f.computeVertexNormals(); return f; };
+  const gCone = facet(new THREE.ConeGeometry(0.5, 1, 7));     // faceted on purpose
+  const gRock = facet(new THREE.IcosahedronGeometry(0.5, 0)); // hard facets, not a ball
   const gSphere = new THREE.SphereGeometry(0.5, 10, 7);
   const gCap = new THREE.CapsuleGeometry(0.34, 0.5, 3, 7);
 
@@ -94,8 +98,8 @@ export function buildWorld(scene, track) {
     windows: 0.80, winSize: [3.6, 4.6], winColor: 0xfff0c0, winDark: 0x54658c, winLit: 0.14
   });
   const mTrim = makeToon({ rim: 0xffffff, rimStrength: 0.55, rimPower: 3.0, noise: 0.08 });
-  const mRock = makeToon({ rim: 0xffe8c0, rimStrength: 0.5, rimPower: 2.6, noise: 0.20, noiseScale: 0.22, flatShading: true });
-  const mLeaf = makeToon({ rim: 0xd8ff9e, rimStrength: 0.6, rimPower: 2.4, noise: 0.22, noiseScale: 0.14, flatShading: true });
+  const mRock = makeToon({ rim: 0xffe8c0, rimStrength: 0.5, rimPower: 2.6, noise: 0.20, noiseScale: 0.22 });
+  const mLeaf = makeToon({ rim: 0xd8ff9e, rimStrength: 0.6, rimPower: 2.4, noise: 0.22, noiseScale: 0.14 });
   const mBark = makeToon({ rim: 0xd8b98a, rimStrength: 0.4, noise: 0.24, noiseScale: 0.5 });
   const mCrowd = makeToon({ rim: 0xffffff, rimStrength: 0.7, rimPower: 2.2, noise: 0.05 });
   const mNeon = new THREE.MeshBasicMaterial({ fog: true, toneMapped: false });
@@ -141,11 +145,13 @@ export function buildWorld(scene, track) {
     }
   }
 
-  // cloud bank under the suspended highway
-  for (let i = 0; i < 380; i++) {
+  // Cloud bank under the suspended highway. It stays tucked close under the
+  // bridge on purpose: the volcano stretch runs a long way below this one, and
+  // a cloud bank that sprawled further just hung grey blobs in its sky.
+  for (let i = 0; i < 340; i++) {
     const t = rr(0.180, 0.298);
-    track.posAt(t, rr(-820, 820), rr(-560, -40), pos);
-    const s = rr(90, 300);
+    track.posAt(t, rr(-520, 520), rr(-360, -30), pos);
+    const s = rr(70, 220);
     put(W.clouds, pos, [0, rr(0, 6), 0], [s, s * rr(0.30, 0.46), s * rr(0.7, 1.0)]);
   }
 
@@ -238,6 +244,26 @@ function gantry(W, base, up, nrm, half, color, height = 26) {
 
 // --- sectors ----------------------------------------------------------------
 
+
+// ---------------------------------------------------------------------------
+// Keeping scenery off the road.
+//
+// The barrier rail sits at half * 1.06. Anything whose edge crosses that reads
+// as an obstacle parked on the track, which is exactly what it looked like
+// before: canyon walls growing out of the tarmac, boulders in the racing line.
+// Every prop near the road now goes through outside(), which pushes it out far
+// enough that its own width clears the rail with room to spare.
+// ---------------------------------------------------------------------------
+const RAIL = 1.06;
+const CLEAR = 7;   // metres of daylight between the rail and the nearest prop
+
+// The width term is deliberately more than half: a two hundred metre canyon
+// wall needs to stand well back to read as scenery, where a boulder only needs
+// to clear the rail. Scaling the clearance with the size does both at once.
+function outside(half, want, width) {
+  return Math.max(want, half * RAIL + CLEAR + width * 0.85);
+}
+
 function dressCity(W, c, nrm, up, half, t, i) {
   const G = -14;
   const p = new THREE.Vector3();
@@ -245,7 +271,7 @@ function dressCity(W, c, nrm, up, half, t, i) {
   for (const side of [-1, 1]) {
     for (let row = 0; row < 3; row++) {
       if (rnd() > (row === 0 ? 0.62 : row === 1 ? 0.5 : 0.4)) continue;
-      const offset = (half * 2.2 + rr(46, 96) + row * rr(120, 250)) * side;
+      const offset = (half * 2.2 + rr(46, 96) + row * rr(90, 150)) * side;
       const hMax = rr(70, 210) * (1 + row * 0.55) * (rnd() > 0.9 ? 1.9 : 1);
       tower(W, c, up, nrm, side, offset, G, hMax);
     }
@@ -270,7 +296,7 @@ function dressCity(W, c, nrm, up, half, t, i) {
   if (rnd() > 0.5) {
     const side = rnd() > 0.5 ? 1 : -1;
     for (let k = 0; k < 3; k++) {
-      const off = (half * 1.55 + k * 6.5) * side;
+      const off = outside(half, half * 1.55 + k * 6.5, 15) * side;
       p.copy(c).addScaledVector(nrm, off).addScaledVector(up, -8 + k * 3.4);
       put(W.trim, p, [0, 0, 0], [15, 3.6, 26], k % 2 ? 0x6a5590 : 0x7b64a4);
       crowdRow(W, c, up, nrm, off, -6.0 + k * 3.4, 4, 20);
@@ -313,7 +339,7 @@ function dressForest(W, c, nrm, up, half, t, i) {
   const p = new THREE.Vector3();
   for (let k = 0; k < 6; k++) {
     const side = rnd() > 0.5 ? 1 : -1;
-    const off = (half * 1.45 + rr(3, 170)) * side;
+    const off = outside(half, half * 1.45 + rr(3, 170), 22) * side;
     p.copy(c).addScaledVector(nrm, off).addScaledVector(up, rr(-4, 0));
     const h = rr(26, 78);
     const tilt = rr(-0.07, 0.07);
@@ -330,21 +356,22 @@ function dressForest(W, c, nrm, up, half, t, i) {
   }
   if (rnd() > 0.55) {
     const side = rnd() > 0.5 ? 1 : -1;
-    p.copy(c).addScaledVector(nrm, half * rr(1.15, 1.6) * side).addScaledVector(up, 0.5);
-    put(W.rocks, p, [rr(0, 3), rr(0, 3), rr(0, 3)], [rr(6, 15), rr(5, 11), rr(6, 15)],
+    const rw = rr(6, 15);
+    p.copy(c).addScaledVector(nrm, outside(half, half * rr(1.2, 1.7), rw) * side).addScaledVector(up, 0.5);
+    put(W.rocks, p, [rr(0, 3), rr(0, 3), rr(0, 3)], [rw, rr(5, 11), rr(6, 15)],
       rnd() > 0.5 ? 0x6b6252 : 0x554c40);
   }
   // undergrowth: low scrub between the trunks, so the floor is not one sheet
   for (let k = 0; k < 3; k++) {
     if (rnd() > 0.5) continue;
     const side = rnd() > 0.5 ? 1 : -1;
-    p.copy(c).addScaledVector(nrm, (half * 1.3 + rr(2, 140)) * side).addScaledVector(up, rr(-3, 0));
+    p.copy(c).addScaledVector(nrm, outside(half, half * 1.3 + rr(2, 140), 14) * side).addScaledVector(up, rr(-3, 0));
     put(W.leaves, p, [rr(-0.2, 0.2), rr(0, 3), rr(-0.2, 0.2)],
       [rr(5, 13), rr(3, 8), rr(5, 13)], shadeHex(pick(FOREST_LEAF), rr(0.55, 0.85)));
   }
   if (rnd() > 0.86) {
     const side = rnd() > 0.5 ? 1 : -1;
-    p.copy(c).addScaledVector(nrm, half * 1.28 * side).addScaledVector(up, 2);
+    p.copy(c).addScaledVector(nrm, outside(half, half * 1.28, 4) * side).addScaledVector(up, 2);
     put(W.bark, p, [Math.PI / 2, rr(-0.4, 0.4), 0], [rr(2.4, 3.6), rr(7, 14), rr(2.4, 3.6)], 0x3f2e1a);
   }
 }
@@ -354,15 +381,17 @@ function dressVolcano(W, c, nrm, up, half, t, i) {
   for (const side of [-1, 1]) {
     // canyon walls built from stacked faceted rock, not one smooth cone
     for (let k = 0; k < 2; k++) {
-      const off = (half * 1.5 + rr(6, 70) + k * 40) * side;
+      const w = rr(34, 78);
+      const off = outside(half, half * 1.5 + rr(6, 70) + k * 40, w) * side;
       const h = rr(50, 200) * (1 + k * 0.4);
       p.copy(c).addScaledVector(nrm, off).addScaledVector(up, h * 0.28 - 24);
       put(W.rocks, p, [rr(-0.2, 0.2), rr(0, 3), rr(-0.2, 0.2)],
-        [rr(34, 78), h, rr(34, 78)], rnd() > 0.65 ? 0x33202a : 0x1c1016);
+        [w, h, rr(34, 78)], rnd() > 0.65 ? 0x4e3040 : 0x2c1a24);
     }
     if (rnd() > 0.42) {
-      p.copy(c).addScaledVector(nrm, (half * 1.36 + rr(2, 40)) * side).addScaledVector(up, -9);
-      put(W.neon, p, [0, rr(0, 3), 0], [rr(16, 46), 1.4, rr(16, 46)], rnd() > 0.5 ? 0xff4a10 : 0xffa030);
+      const lw = rr(16, 46);
+      p.copy(c).addScaledVector(nrm, outside(half, half * 1.36 + rr(2, 40), lw) * side).addScaledVector(up, -9);
+      put(W.neon, p, [0, rr(0, 3), 0], [lw, 1.4, rr(16, 46)], rnd() > 0.5 ? 0xff4a10 : 0xffa030);
     }
   }
   if (rnd() > 0.84) {
@@ -408,8 +437,10 @@ function dressUnderground(W, c, nrm, up, half, t, i) {
   }
   // pools of light thrown onto the road, so the tunnel has something to read
   if (rnd() > 0.55) {
-    p.copy(c).addScaledVector(nrm, rr(-half, half)).addScaledVector(up, 0.35);
-    put(W.neon, p, [0, 0, 0], [rr(4, 11), 0.2, rr(6, 16)], 0x0d3a44);
+    // this one is meant to be on the road: it is the light, not a thing in
+    // the way. Thin and bright so it never reads as something to dodge.
+    p.copy(c).addScaledVector(nrm, rr(-half * 0.8, half * 0.8)).addScaledVector(up, 0.22);
+    put(W.neon, p, [0, 0, 0], [rr(4, 11), 0.1, rr(6, 16)], 0x1c6d7a);
   }
   // floor strips, the thing that actually lets you read the road down here
   for (const side of [-1, 1]) {
@@ -418,12 +449,12 @@ function dressUnderground(W, c, nrm, up, half, t, i) {
   }
   if (rnd() > 0.7) {
     const side = rnd() > 0.5 ? 1 : -1;
-    p.copy(c).addScaledVector(nrm, (half * 1.5 + rr(4, 30)) * side).addScaledVector(up, rr(8, 30));
+    p.copy(c).addScaledVector(nrm, outside(half, half * 1.5 + rr(4, 30), 5) * side).addScaledVector(up, rr(8, 30));
     put(W.cyls, p, [Math.PI / 2, rr(-0.3, 0.3), 0], [rr(2, 5), 40, rr(2, 5)], 0x27323e);
   }
   if (rnd() > 0.82) {
     const side = rnd() > 0.5 ? 1 : -1;
-    p.copy(c).addScaledVector(nrm, (half * 1.6 + rr(8, 44)) * side).addScaledVector(up, 6);
+    p.copy(c).addScaledVector(nrm, outside(half, half * 1.6 + rr(8, 44), 22) * side).addScaledVector(up, 6);
     put(W.rocks, p, [rr(0, 3), rr(0, 3), rr(0, 3)], [rr(8, 22), rr(8, 20), rr(8, 22)], 0x141d26);
   }
 }
@@ -432,7 +463,7 @@ function dressArena(W, c, nrm, up, half, t, i) {
   const p = new THREE.Vector3();
   if (rnd() > 0.5) {
     for (const side of [-1, 1]) {
-      const off = (half * 1.2 + rr(24, 110)) * side;
+      const off = outside(half, half * 1.2 + rr(24, 110), 48) * side;
       p.copy(c).addScaledVector(nrm, off).addScaledVector(up, 62);
       put(W.cyls, p, [0, 0, 0], [rr(15, 27), 132, rr(15, 27)], 0x3f2b64);
       p.copy(c).addScaledVector(nrm, off).addScaledVector(up, 130);
@@ -451,7 +482,7 @@ function dressArena(W, c, nrm, up, half, t, i) {
   if (rnd() > 0.35) {
     for (const side of [-1, 1]) {
       for (let k = 0; k < 5; k++) {
-        const off = (half * 1.1 + k * 9) * side;
+        const off = outside(half, half * 1.1 + k * 9, half * 0.16) * side;
         p.copy(c).addScaledVector(nrm, off).addScaledVector(up, 4 + k * 7);
         put(W.trim, p, [0, 0, 0], [half * 0.16, 7.4, 34], k % 2 ? 0x2e1f4e : 0x3b2963);
         crowdRow(W, c, up, nrm, off, 7 + k * 7, 5, 26);
@@ -465,12 +496,19 @@ function dressArena(W, c, nrm, up, half, t, i) {
 // The ground.
 // ---------------------------------------------------------------------------
 const GROUND_DEPTH = { city: 14, highway: 1000, forest: 6, volcano: 30, underground: 46, arena: 18 };
-const GROUND_WIDTH = { city: 900, highway: 40, forest: 500, volcano: 420, underground: 150, arena: 700 };
+const GROUND_WIDTH = { city: 470, highway: 40, forest: 330, volcano: 300, underground: 130, arena: 380 };
+
+// The track loops back over itself, so two stretches of road can sit a few
+// hundred metres apart with half a kilometre of height between them. A flat
+// ground slab that wide slices straight through the neighbouring stretch,
+// which is what those enormous slabs cutting across the sky were. Each sector
+// now sits on its own mesa: flat near the road, then the flanks fall away.
+const GROUND_PROFILE = [1, 0.42, 0.10, 0, 0.10, 0.42, 1];
 
 function buildGround(scene, track) {
   const N = track.samples, STRIDE = 6;
   const rows = Math.floor(N / STRIDE) + 1;
-  const cols = 5;
+  const cols = GROUND_PROFILE.length;
   const pos = new Float32Array(rows * cols * 3);
   const col = new Float32Array(rows * cols * 3);
   const c = new THREE.Color(), p = new THREE.Vector3();
@@ -488,12 +526,13 @@ function buildGround(scene, track) {
 
     for (let j = 0; j < cols; j++) {
       const lat = (j / (cols - 1) - 0.5) * 2;
+      const fall = GROUND_PROFILE[j] * width * 0.85;
       p.copy(track.pts[i])
         .addScaledVector(track.nrm[i], lat * width)
-        .addScaledVector(track.up[i], -depth);
+        .addScaledVector(track.up[i], -depth - fall);
       const o = (r * cols + j) * 3;
       pos[o] = p.x; pos[o + 1] = p.y; pos[o + 2] = p.z;
-      const shade = 1 - Math.abs(lat) * 0.22;
+      const shade = 1 - GROUND_PROFILE[j] * 0.30;
       col[o] = c.r * shade; col[o + 1] = c.g * shade; col[o + 2] = c.b * shade;
     }
   }

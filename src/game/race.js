@@ -92,12 +92,20 @@ export class Race {
     const pos = new Float32Array(rows * 2 * 3);
     const col = new Float32Array(rows * 2 * 3);
     const c = new THREE.Color(), p = new THREE.Vector3();
+    // Gold along the threads, deep violet through the heart. The colour change
+    // is what makes the middle read as a separate thing rather than more rope.
+    const GOLD = new THREE.Color(0xffc24a);
+    const VIOLET = new THREE.Color(0xa855ff);
+    const PINK = new THREE.Color(0xff3d8a);
     for (let r = 0; r < rows; r++) {
       const i = Math.min(N, r * STRIDE);
-      const sec = sectorAt(i / N);
-      c.setHex(sec.kerbA).lerp(new THREE.Color(sec.kerbB), 0.35);
+      const t = i / N;
+      const inHeart = THREE.MathUtils.smoothstep(t, 0.26, 0.33)
+                    * (1 - THREE.MathUtils.smoothstep(t, 0.80, 0.87));
+      c.copy(GOLD).lerp(VIOLET, inHeart);
+      c.lerp(PINK, inHeart * 0.35 * (0.5 + 0.5 * Math.sin(i * 0.02)));
       for (let k = 0; k < 2; k++) {
-        p.copy(tr.pts[i]).addScaledVector(tr.nrm[i], (k ? 1 : -1) * 145);
+        p.copy(tr.pts[i]).addScaledVector(tr.nrm[i], (k ? 1 : -1) * 165);
         const o = (r * 2 + k) * 3;
         pos[o] = p.x; pos[o + 1] = p.y + 6; pos[o + 2] = p.z;
         col[o] = c.r; col[o + 1] = c.g; col[o + 2] = c.b;
@@ -121,6 +129,31 @@ export class Race {
     m.frustumCulled = false;
     this.scene.add(m);
     this.revealMesh = m;
+
+    // A soft violet glow filling the heart, so the middle of the rakhi has a
+    // colour of its own rather than being empty ground with a line round it.
+    const glow = new THREE.Mesh(
+      new THREE.CircleGeometry(2400, 48),
+      new THREE.ShaderMaterial({
+        transparent: true, depthWrite: false, fog: false, toneMapped: false,
+        blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+        uniforms: { uOpacity: { value: 0 } },
+        vertexShader: 'varying vec2 vP; void main(){ vP = position.xy / 2400.0; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+        fragmentShader: `
+          varying vec2 vP; uniform float uOpacity;
+          void main() {
+            float d = length(vP);
+            float a = pow(max(0.0, 1.0 - d), 2.2);
+            vec3 c = mix(vec3(1.0, 0.36, 0.62), vec3(0.55, 0.28, 1.0), smoothstep(0.0, 0.9, d));
+            gl_FragColor = vec4(c * a, a * uOpacity);
+          }`
+      }));
+    glow.rotation.x = -Math.PI / 2;
+    glow.position.set(0, -140, -180);
+    glow.visible = false;
+    glow.frustumCulled = false;
+    this.scene.add(glow);
+    this.heartGlow = glow;
   }
 
   // -------------------------------------------------------------------------
@@ -138,9 +171,12 @@ export class Race {
     this.player.t = 0.0002;
     this.player.assist = mode === 'time' ? 0.55 : 1;
     this.pack.reset();
-    this.pack.racers.forEach(r => { r.baseSpeed = spec.topSpeed; });
+    // drag means she never reaches the quoted top speed, so pace the family
+    // against what she actually does or they simply drive away from her
+    this.pack.racers.forEach(r => { r.baseSpeed = spec.topSpeed * 0.80; });
     this.boss.clear();
     this.boss.defeated = false;
+    this.items.reset();
     this.items.layout([
       [0.020, 0.185, 0.016],
       [0.200, 0.262, 0.018],
@@ -322,7 +358,7 @@ export class Race {
       }
       // everyone revs on the spot
       this.pack.update(dt * 0.15, P, {});
-      P.update(dt, { steer: 0, steerRaw: 0, boost: false, brake: true }, { speedCap: 0 });
+      P.update(dt, { steer: 0, steerRaw: 0, throttle: 0, brake: 1, boost: false }, { speedCap: 0 });
       D.update(dt, P);
       return;
     }
@@ -331,11 +367,7 @@ export class Race {
     if (!racing) { D.update(dt, P); return; }
 
     // ---- driving ----
-    const inp = this.reverse
-      ? { ...input, steer: -input.steer, steerRaw: -input.steerRaw }
-      : input;
-
-    P.update(dt, inp, {
+    P.update(dt, input, {
       onScrape: () => { D.addShake(0.10); audio.scrape(); },
       onLand: (v) => {
         D.addShake(0.35 + Math.min(0.6, v.speed * 0.006));
@@ -349,7 +381,11 @@ export class Race {
       audio.ability(P.spec.id);
       H.shout(P.spec.ability.name.split(' ')[0], 1.0);
     }
-    if (input.itemEdge) this.items.use(P, this.pack, H, {});
+    if (input.itemEdge) {
+      this.items.use(P, this.pack, H, {
+        onUse: (it) => H.shout(it.name.split(' ')[0], 0.9)
+      });
+    }
 
     // ---- the family ----
     this.pack.update(dt, P, {
@@ -362,6 +398,20 @@ export class Race {
       },
       onBump: (r) => { audio.impact(0.7); D.addShake(0.3); this.vfx.sparks(r.group.position, 10, 0xffd23d); },
       onBark: (r, text) => this.showBark(r, text),
+      onDuelStart: (r) => {
+        H.duel(r.def.title, '#' + r.def.color.toString(16).padStart(6, '0'), r.def.note);
+        audio.duelIn();
+      },
+      onDuelWon: (r) => {
+        H.duelWon(r.def.title, '#' + r.def.color.toString(16).padStart(6, '0'));
+        audio.duelWon();
+        this.showBark(r, 'ARRE!');
+      },
+      onRelativeDrop: (r) => {
+        // whatever they leave behind is a real hazard she has to steer around
+        const kind = Math.random() > 0.45 ? 'banana' : 'slick';
+        this.items.dropFrom(r, kind);
+      },
       onEliminate: (r, e) => this.onEliminate(r, e),
       onSurvive: (r, e) => {
         H.card(r.def.title, e.how, 3.0);
@@ -370,16 +420,24 @@ export class Race {
     });
 
     // ---- items ----
-    this.items.update(dt, P, H, {});
-    this.items.resolve(this.pack, P, this.vfx, {
-      onHit: (r) => { D.addShake(0.4); H.shout('BONK', 0.8); }
+    const pos = this.pack.positionOf(P);
+    this.items.update(dt, P, H, {
+      position: pos, total: this.pack.aliveCount(),
+      onPickup: (it) => { H.itemHint(it); }
     });
-    if (this.items.tether) {
-      const tg = this.items.tether.target;
-      if (tg && tg.alive) {
-        P.lat += (tg.lat - P.lat) * Math.min(1, 1.4 * dt);
-      }
-    }
+    this.items.step(dt, P, this.pack, {
+      onHitRelative: (r, kind) => {
+        D.addShake(0.4);
+        H.shout(kind === 'banana' ? 'SLIP' : kind === 'bonk' ? 'BONK' : 'HIT', 0.8);
+        this.showBark(r, 'AREY!');
+      },
+      onPlayerSlip: (kind) => {
+        D.addShake(0.8);
+        H.flash(kind === 'banana' ? '#ffd23d' : '#ffe08a', 0.35, 380);
+        H.shout(kind === 'banana' ? 'SLIP!' : 'SLIDING!', 1.0);
+      },
+      onThunder: (n) => { H.shout('THUNDER', 1.2); D.addShake(1.1); H.flash('#8f6aff', 0.5, 500); }
+    });
 
     // ---- the boss ----
     if (this.boss.active) {
@@ -537,18 +595,20 @@ export class Race {
     const D = this.director, tr = this.track;
     this.state = 'reveal';
     this.revealMesh.visible = true;
+    this.heartGlow.visible = true;
     audio.setStyle('win');
 
     // straight up first, then out over the knot. going diagonally would fly the
     // camera through half the forest on the way.
     const p0 = this.player.worldPos(new THREE.Vector3()).add(new THREE.Vector3(0, 10, -34));
     const p1 = p0.clone().setY(2600);
-    const p2 = new THREE.Vector3(-1400, 11400, 5600);
+    const p2 = new THREE.Vector3(-1950, 11200, 4600);
     const look0 = this.player.worldPos(new THREE.Vector3());
     const look1 = p0.clone().setY(0);
-    const centre = new THREE.Vector3(-1400, -300, 700);
+    const centre = new THREE.Vector3(-1950, -300, -60);
 
     const mesh = this.revealMesh;
+    const glow = this.heartGlow;
     const post = this.post;
 
     D.play({
@@ -582,6 +642,7 @@ export class Race {
           fov = 52;
         }
         mesh.material.opacity = THREE.MathUtils.smoothstep(k, 0.20, 0.55) * 1.0;
+        glow.material.uniforms.uOpacity.value = THREE.MathUtils.smoothstep(k, 0.38, 0.78) * 0.85;
         post.u.uVignette.value = 0.55 + THREE.MathUtils.smoothstep(k, 0.3, 1) * 0.22;
         return { pos, look, fov, snap: k < 0.015 };
       },

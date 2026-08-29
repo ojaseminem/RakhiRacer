@@ -161,42 +161,53 @@ function heroWrap(build) {
 // VELOCITY. Low, long, wedge nosed, enormous rear wing. Reads fast standing still.
 export const buildVelocity = heroWrap((g, spec, wheels, glows) => {
   const body = sharedToon('v-body' + spec.body, {
-    color: spec.body, rim: 0xffd0c0, rimStrength: 0.95, rimPower: 2.0, bounceStrength: 0.35
+    color: spec.body, rim: 0xffe6d6, rimStrength: 0.40, rimPower: 3.2, bounceStrength: 0.30
   });
-  const acc = sharedToon('v-acc' + spec.accent, { color: spec.accent, rim: 0xffffff, rimStrength: 0.8 });
+  const acc = sharedToon('v-acc' + spec.accent, { color: spec.accent, rim: 0xffffff, rimStrength: 0.34, rimPower: 3.2 });
+  const dark = sharedToon('v-dark', { color: 0x1b1426, rim: 0xffffff, rimStrength: 0.30, rimPower: 3.4 });
 
   // main tub, tapered by scaling a rounded box
-  const tub = mesh(rbox(2.0, 0.72, 4.6, 0.34), body, 0, 0.72, 0);
+  const tub = mesh(rbox(2.0, 0.72, 4.6, 0.14), body, 0, 0.76, 0);
   g.add(tub);
-  const nose = mesh(rbox(1.7, 0.44, 1.9, 0.20), body, 0, 0.60, 2.55);
-  nose.scale.set(1, 1, 1);
+  // a dark rocker under the tub. without it the car reads as one solid lozenge
+  // floating over the road instead of a shell sitting on a floor.
+  const rocker = mesh(rbox(2.06, 0.30, 4.3, 0.08), dark, 0, 0.40, 0);
+  g.add(rocker);
+  const nose = mesh(rbox(1.7, 0.40, 2.1, 0.10), body, 0, 0.62, 2.55);
+  nose.rotation.x = -0.05;
   g.add(nose);
+  // a centre stripe over the whole length, the cheapest way to say racing car
+  const stripe = mesh(rbox(0.44, 0.06, 6.0, 0.02), acc, 0, 1.13, 0.9);
+  g.add(stripe);
   // splitter
-  const split = mesh(rbox(2.2, 0.12, 0.9, 0.05), acc, 0, 0.34, 3.15);
+  const split = mesh(rbox(2.3, 0.10, 0.9, 0.04), dark, 0, 0.32, 3.2);
   g.add(split);
   // cockpit bubble
-  const cab = mesh(rbox(1.36, 0.62, 1.7, 0.30), matGlass(), 0, 1.24, -0.15);
+  const cab = mesh(rbox(1.30, 0.58, 1.7, 0.18), matGlass(), 0, 1.26, -0.15);
   g.add(cab);
   // haunches over the rear wheels
   for (const s of [-1, 1]) {
-    const h = mesh(rbox(0.62, 0.66, 2.0, 0.28), body, s * 1.02, 0.86, -1.15);
+    const h = mesh(rbox(0.62, 0.70, 2.0, 0.16), body, s * 1.02, 0.90, -1.15);
     g.add(h);
-    const sidepod = mesh(rbox(0.42, 0.34, 1.5, 0.16), acc, s * 1.12, 0.66, 0.65);
+    const sidepod = mesh(rbox(0.40, 0.30, 1.6, 0.08), dark, s * 1.12, 0.62, 0.65);
     g.add(sidepod);
+    // an intake ahead of the rear wheel, so the flank is not one blank slab
+    const intake = mesh(rbox(0.16, 0.36, 0.7, 0.06), acc, s * 1.18, 0.86, -0.05);
+    g.add(intake);
   }
   // rear wing
-  const wingPost = mesh(rbox(0.16, 0.6, 0.2, 0.06), acc, 0, 1.30, -2.5);
+  const wingPost = mesh(rbox(0.14, 0.66, 0.18, 0.05), dark, 0, 1.34, -2.5);
   g.add(wingPost);
-  const wing = mesh(rbox(2.5, 0.13, 0.72, 0.06), acc, 0, 1.66, -2.6);
+  const wing = mesh(rbox(2.4, 0.11, 0.62, 0.04), acc, 0, 1.70, -2.6);
   wing.rotation.x = -0.16;
   g.add(wing);
   for (const s of [-1, 1]) {
-    const ep = mesh(rbox(0.1, 0.42, 0.72, 0.05), body, s * 1.24, 1.60, -2.6);
+    const ep = mesh(rbox(0.08, 0.40, 0.66, 0.03), body, s * 1.19, 1.62, -2.6);
     g.add(ep);
   }
   // exhaust glow
   for (const s of [-1, 1]) {
-    const ex = new THREE.Mesh(cyl(0.20, 0.24, 0.18, 12), makeGlow(spec.glow, 0.95));
+    const ex = new THREE.Mesh(cyl(0.15, 0.18, 0.16, 12), makeGlow(spec.glow, 0.62));
     ex.rotation.x = Math.PI / 2;
     ex.position.set(s * 0.42, 0.78, -2.62);
     g.add(ex); glows.push(ex);
@@ -221,17 +232,17 @@ export const buildVelocity = heroWrap((g, spec, wheels, glows) => {
 // THE BEAST. Comically oversized. The cab is far too small for the tyres.
 export const buildBeast = heroWrap((g, spec, wheels, glows) => {
   const body = sharedToon('b-body' + spec.body, {
-    color: spec.body, rim: 0xfff0c0, rimStrength: 0.85, rimPower: 2.2, bounceStrength: 0.4
+    color: spec.body, rim: 0xfff0c0, rimStrength: 0.38, rimPower: 3.2, bounceStrength: 0.34
   });
-  const acc = sharedToon('b-acc' + spec.accent, { color: spec.accent, rim: 0xffffff, rimStrength: 0.8 });
+  const acc = sharedToon('b-acc' + spec.accent, { color: spec.accent, rim: 0xffffff, rimStrength: 0.32, rimPower: 3.2 });
 
   const chassis = mesh(rbox(2.5, 0.5, 4.6, 0.22), matDark(), 0, 1.30, 0);
   g.add(chassis);
-  const tub = mesh(rbox(2.7, 1.25, 3.4, 0.45), body, 0, 2.10, -0.35);
+  const tub = mesh(rbox(2.7, 1.25, 3.4, 0.20), body, 0, 2.10, -0.35);
   g.add(tub);
-  const cab = mesh(rbox(2.0, 0.95, 1.5, 0.36), matGlass(), 0, 2.95, 0.25);
+  const cab = mesh(rbox(1.96, 0.95, 1.5, 0.18), matGlass(), 0, 2.95, 0.25);
   g.add(cab);
-  const hood = mesh(rbox(2.5, 0.7, 1.5, 0.30), body, 0, 2.05, 1.75);
+  const hood = mesh(rbox(2.5, 0.7, 1.5, 0.14), body, 0, 2.05, 1.75);
   g.add(hood);
   // bull bar, the business end
   const bar = mesh(rbox(3.0, 0.34, 0.32, 0.15), acc, 0, 1.60, 2.75);
@@ -244,7 +255,7 @@ export const buildBeast = heroWrap((g, spec, wheels, glows) => {
   g.add(grille);
   // roof lights
   for (let i = 0; i < 4; i++) {
-    const l = new THREE.Mesh(sph(0.16, 10), makeGlow(0xfff0b0, 0.95));
+    const l = new THREE.Mesh(sph(0.14, 10), makeGlow(0xfff0b0, 0.65));
     l.position.set(-0.75 + i * 0.5, 3.52, 0.15);
     g.add(l); glows.push(l);
   }
@@ -252,7 +263,7 @@ export const buildBeast = heroWrap((g, spec, wheels, glows) => {
   for (const s of [-1, 1]) {
     const st = mesh(cyl(0.16, 0.19, 1.8, 10), matChrome(), s * 1.25, 2.85, -0.9);
     g.add(st);
-    const puff = new THREE.Mesh(sph(0.18, 8), makeGlow(spec.glow, 0.8));
+    const puff = new THREE.Mesh(sph(0.16, 8), makeGlow(spec.glow, 0.55));
     puff.position.set(s * 1.25, 3.78, -0.9);
     g.add(puff); glows.push(puff);
   }
@@ -270,17 +281,17 @@ export const buildBeast = heroWrap((g, spec, wheels, glows) => {
 // THE COMET. Long, low, hovering. Two glowing wheels that never touch anything.
 export const buildComet = heroWrap((g, spec, wheels, glows) => {
   const body = sharedToon('c-body' + spec.body, {
-    color: spec.body, rim: 0xd0faff, rimStrength: 1.15, rimPower: 1.9, bounceStrength: 0.35
+    color: spec.body, rim: 0xd0faff, rimStrength: 0.46, rimPower: 3.0, bounceStrength: 0.32
   });
-  const acc = sharedToon('c-acc' + spec.accent, { color: spec.accent, rim: 0xffffff, rimStrength: 1.0 });
+  const acc = sharedToon('c-acc' + spec.accent, { color: spec.accent, rim: 0xffffff, rimStrength: 0.40, rimPower: 3.0 });
 
-  const spine = mesh(rbox(0.66, 0.52, 4.5, 0.26), body, 0, 1.10, 0);
+  const spine = mesh(rbox(0.66, 0.52, 4.5, 0.14), body, 0, 1.10, 0);
   g.add(spine);
   const tank = mesh(cap(0.42, 1.5, 12), body, 0, 1.34, 0.35);
   tank.rotation.x = Math.PI / 2;
   g.add(tank);
   // long front fairing
-  const fair = mesh(rbox(0.72, 0.62, 1.9, 0.30), acc, 0, 1.18, 1.95);
+  const fair = mesh(rbox(0.72, 0.62, 2.0, 0.16), acc, 0, 1.18, 1.95);
   g.add(fair);
   const screen = mesh(rbox(0.5, 0.4, 0.5, 0.2), matGlass(), 0, 1.55, 2.35);
   screen.rotation.x = -0.4;
@@ -294,18 +305,18 @@ export const buildComet = heroWrap((g, spec, wheels, glows) => {
     const wl = mesh(rbox(0.9, 0.1, 1.6, 0.05), acc, s * 0.68, 1.05, -0.5);
     wl.rotation.z = s * 0.22;
     g.add(wl);
-    const strip = new THREE.Mesh(rbox(0.86, 0.05, 1.3, 0.02), makeGlow(spec.glow, 0.55));
+    const strip = new THREE.Mesh(rbox(0.84, 0.04, 1.3, 0.02), makeGlow(spec.glow, 0.40));
     strip.position.set(s * 0.70, 1.11, -0.5);
     strip.rotation.z = s * 0.22;
     g.add(strip); glows.push(strip);
   }
   // thruster
-  const th = new THREE.Mesh(cyl(0.30, 0.34, 0.2, 14), makeGlow(spec.glow, 0.75));
+  const th = new THREE.Mesh(cyl(0.26, 0.30, 0.2, 14), makeGlow(spec.glow, 0.55));
   th.rotation.x = Math.PI / 2;
   th.position.set(0, 1.24, -2.62);
   g.add(th); glows.push(th);
   // underglow slab, sells the hover
-  const ug = new THREE.Mesh(rbox(1.1, 0.06, 3.6, 0.03), makeGlow(spec.glow, 0.28));
+  const ug = new THREE.Mesh(rbox(1.0, 0.05, 3.4, 0.02), makeGlow(spec.glow, 0.20));
   ug.position.set(0, 0.42, 0);
   g.add(ug); glows.push(ug);
 
@@ -353,14 +364,20 @@ export function buildFamilyRide(rideId, color, accent) {
   const g = new THREE.Group();
   const wheels = [];
   const body = sharedToon('f' + color, {
-    color, rim: 0xffffff, rimStrength: 0.8, rimPower: 2.2, bounceStrength: 0.35
+    color, rim: 0xffffff, rimStrength: 0.36, rimPower: 3.2, bounceStrength: 0.32
   });
-  const acc = sharedToon('fa' + accent, { color: accent, rim: 0xffffff, rimStrength: 0.7 });
+  const acc = sharedToon('fa' + accent, { color: accent, rim: 0xffffff, rimStrength: 0.30, rimPower: 3.2 });
 
-  const hull = mesh(rbox(s.w, s.h, s.l, s.round ? Math.min(s.w, s.h) * 0.45 : 0.28), body, 0, s.ry, 0);
+  const hull = mesh(rbox(s.w, s.h, s.l, s.round ? Math.min(s.w, s.h) * 0.32 : 0.14), body, 0, s.ry, 0);
   g.add(hull);
+  // the same dark rocker the hero cars get, so the family reads as sitting on
+  // the road rather than hovering a foot above it
+  const sill = mesh(rbox(s.w * 1.01, s.h * 0.34, s.l * 0.94, 0.06),
+    sharedToon('f-sill', { color: 0x191324, rim: 0xffffff, rimStrength: 0.26, rimPower: 3.4 }),
+    0, s.ry - s.h * 0.42, 0);
+  g.add(sill);
   if (!s.open) {
-    const cab = mesh(rbox(s.cw, s.ch, s.l * 0.46, 0.26), matGlass(), 0, s.ry + s.h * 0.5 + s.ch * 0.42, s.cz);
+    const cab = mesh(rbox(s.cw, s.ch, s.l * 0.46, 0.13), matGlass(), 0, s.ry + s.h * 0.5 + s.ch * 0.42, s.cz);
     g.add(cab);
   } else {
     // roll cage
@@ -395,10 +412,10 @@ export function buildFamilyRide(rideId, color, accent) {
     g.add(b);
   }
   for (const sx of [-1, 1]) {
-    const hl = new THREE.Mesh(sph(0.15, 8), makeGlow(0xfff2c8, 0.9));
+    const hl = new THREE.Mesh(sph(0.13, 8), makeGlow(0xfff2c8, 0.62));
     hl.position.set(sx * s.w * 0.32, s.ry + s.h * 0.12, s.l * 0.48);
     g.add(hl);
-    const tl = new THREE.Mesh(sph(0.13, 8), makeGlow(0xff3a4a, 0.9));
+    const tl = new THREE.Mesh(sph(0.12, 8), makeGlow(0xff3a4a, 0.60));
     tl.position.set(sx * s.w * 0.32, s.ry + s.h * 0.12, -s.l * 0.48);
     g.add(tl);
   }

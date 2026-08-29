@@ -86,8 +86,7 @@ function restyle(root) {
         bounceStrength: 0.3,
         noise: 0.06,
         transparent: !!src.transparent,
-        opacity: src.opacity ?? 1,
-        flatShading: !!src.flatShading
+        opacity: src.opacity ?? 1
       });
       // keep any baked texture the model brought with it
       if (src.map) m.map = src.map;

@@ -17,6 +17,8 @@ export class HUD {
       sectorNum: $('sector-num'), sectorName: $('sector-name'),
       pos: $('pos-num'), progressFill: $('progressfill'), progressDot: $('progressdot'),
       card: $('card'), cardTitle: $('card-title'), cardSub: $('card-sub'),
+      duel: $('duel'), duelKicker: $('duel-kicker'), duelName: $('duel-name'), duelNote: $('duel-note'),
+      itemHint: $('itemhint'), insetFrame: $('inset-frame'), insetLabel: $('inset-label'),
       chapter: $('chapter'), chapterKicker: $('chapter-kicker'), chapterTitle: $('chapter-title'),
       shout: $('shout'), subtitle: $('subtitle'), barkLayer: $('barklayer'),
       flash: $('flash'), skiphint: $('skiphint')
@@ -72,6 +74,53 @@ export class HUD {
     this.el.itemIcon.textContent = item ? item.glyph : '';
     this.el.itemIcon.style.background = item ? '#' + item.color.toString(16).padStart(6, '0') : 'transparent';
     $('itemslot').classList.toggle('has', !!item);
+  }
+
+  // ---- duels --------------------------------------------------------------
+  // One relative at a time is the one she is actually racing. Saying so out
+  // loud is what turns twelve cars into an opponent.
+  duel(title, color, note) {
+    const e = this.el;
+    e.duelKicker.textContent = 'NOW RACING';
+    e.duelName.textContent = title;
+    e.duelNote.textContent = note || '';
+    e.duel.style.setProperty('--dc', color);
+    e.duel.classList.remove('won');
+    e.duel.classList.remove('show');
+    void e.duel.offsetWidth;
+    e.duel.classList.add('show');
+    clearTimeout(this._duelT);
+    this._duelT = setTimeout(() => e.duel.classList.remove('show'), 4200);
+  }
+
+  duelWon(title, color) {
+    const e = this.el;
+    e.duelKicker.textContent = 'BEATEN';
+    e.duelName.textContent = title;
+    e.duelNote.textContent = 'one down';
+    e.duel.style.setProperty('--dc', color);
+    e.duel.classList.add('won');
+    e.duel.classList.remove('show');
+    void e.duel.offsetWidth;
+    e.duel.classList.add('show');
+    clearTimeout(this._duelT);
+    this._duelT = setTimeout(() => e.duel.classList.remove('show'), 2600);
+  }
+
+  itemHint(item) {
+    const e = this.el.itemHint;
+    if (!item) { e.classList.remove('show'); return; }
+    e.innerHTML = `<b>${item.name}</b><span>${item.blurb || ''}</span>`;
+    e.classList.remove('show');
+    void e.offsetWidth;
+    e.classList.add('show');
+    clearTimeout(this._hintT);
+    this._hintT = setTimeout(() => e.classList.remove('show'), 3600);
+  }
+
+  inset(on, label) {
+    this.el.insetFrame.classList.toggle('show', !!on);
+    if (label) this.el.insetLabel.textContent = label;
   }
 
   // ---- cinematic overlays -------------------------------------------------

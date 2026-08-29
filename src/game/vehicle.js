@@ -46,6 +46,9 @@ export class Vehicle {
     this.invuln = 0;
     this.stunned = 0;
     this.offroad = 0;
+    this.slipping = 0;      // ghee slick and banana peel
+    this.spinOut = 0;       // full spin, from a banana
+    this.scraping = 0;
     this.speedMul = 1;       // external multipliers, items and pads
     this.extMul = 1;
     this.topSpeed = spec.topSpeed;
@@ -85,6 +88,18 @@ export class Vehicle {
     return true;
   }
 
+  slip(dur = 1.6, spin = false) {
+    if (this.invuln > 0 || (this.abilityActive && this.spec.id === 'comet')) return false;
+    this.slipping = Math.max(this.slipping, dur);
+    if (spin) {
+      this.spinOut = Math.max(this.spinOut, 1.15);
+      this.spinDir = Math.random() > 0.5 ? 1 : -1;
+      this.speed *= 0.55;
+    }
+    this.hits++;
+    return true;
+  }
+
   launch(vy) {
     if (this.airborne) return;
     this.airborne = true;
@@ -101,6 +116,8 @@ export class Vehicle {
     this.abilityCool = Math.max(0, this.abilityCool - dt);
     this.invuln = Math.max(0, this.invuln - dt);
     this.stunned = Math.max(0, this.stunned - dt);
+    this.slipping = Math.max(0, this.slipping - dt);
+    this.spinOut = Math.max(0, this.spinOut - dt);
     if (this.abilityActive) {
       this.abilityTime -= dt;
       if (this.abilityTime <= 0) { this.abilityActive = false; this.abilityTime = 0; }
@@ -111,32 +128,52 @@ export class Vehicle {
     this.offroad = overEdge > 0.5 ? Math.min(1, overEdge / 12) : 0;
 
     // ---- longitudinal ----
+    // A force model rather than a target speed, so the throttle has weight:
+    // acceleration falls off as she approaches top speed, letting go coasts,
+    // and the brake actually bites.
     const nitro = this.abilityActive && s.id === 'velocity' ? 1.30 : 1;
     const fury = this.abilityActive && s.id === 'beast' ? 1.18 : 1;
     const phase = this.abilityActive && s.id === 'comet' ? 1.12 : 1;
 
     this.boosting = false;
     let mul = this.speedMul * this.extMul * nitro * fury * phase;
-    if (input.boost && this.boost > 1 && this.stunned <= 0) {
+    if (input.boost && this.boost > 1 && this.stunned <= 0 && input.throttle > 0.05) {
       this.boosting = true;
       this.boost = Math.max(0, this.boost - s.boostDrain * dt);
       mul *= s.boostMul;
     } else {
-      this.boost = Math.min(100, this.boost + s.boostRegen * dt * (this.boosting ? 0 : 1));
+      this.boost = Math.min(100, this.boost + s.boostRegen * dt);
     }
     this.boostBlend += ((this.boosting ? 1 : 0) - this.boostBlend) * Math.min(1, 7 * dt);
 
-    // multipliers stack (boost plus an item plus an ability), so cap the total
-    // or a lucky pickup turns her into a bullet
-    let target = Math.min(s.topSpeed * mul, s.topSpeed * 1.72);
-    if (this.offroad) target *= 1 - 0.42 * this.offroad;
-    if (this.stunned > 0) target *= 0.35;
-    if (input.brake) target *= 0.30;
-    if (ctx.speedCap !== undefined) target = Math.min(target, ctx.speedCap);
+    let ceiling = Math.min(s.topSpeed * mul, s.topSpeed * 1.72);
+    if (this.offroad) ceiling *= 1 - 0.42 * this.offroad;
+    if (this.stunned > 0) ceiling *= 0.35;
+    if (this.slipping > 0) ceiling *= 0.72;
+    if (ctx.speedCap !== undefined) ceiling = Math.min(ceiling, ctx.speedCap);
 
-    const rate = this.speed < target ? s.accel * (this.stunned > 0 ? 0.4 : 1) : s.brake;
-    this.speed += (target - this.speed) * Math.min(1, (rate / Math.max(20, s.topSpeed)) * dt * 3.4);
+    // Idle cruise. Let go of everything and she settles at a comfortable pace
+    // instead of rolling to a stop, so nobody who has never played a racing
+    // game gets stranded. Pressing W is still clearly faster.
+    const cruise = ctx.speedCap !== undefined ? ctx.speedCap : ceiling * 0.46;
+    const wantThrottle = Math.max(input.throttle || 0,
+      (input.brake > 0.05 ? 0 : (this.speed < cruise ? 0.55 : 0)));
+
+    let force = 0;
+    if (wantThrottle > 0) {
+      // power tapers off near the ceiling, which is what gives a top speed feel
+      const headroom = Math.max(0, 1 - this.speed / Math.max(1, ceiling));
+      force += s.accel * wantThrottle * (0.35 + 0.65 * headroom) * (this.stunned > 0 ? 0.35 : 1);
+    }
+    if (input.brake > 0) force -= s.brake * input.brake;
+    force -= this.speed * (0.26 + (this.offroad ? 0.9 : 0) + (this.slipping > 0 ? 0.25 : 0));
+
+    this.speed += force * dt;
+    if (this.speed > ceiling) this.speed += (ceiling - this.speed) * Math.min(1, 3.2 * dt);
     this.speed = Math.max(0, this.speed);
+    this.throttleBlend = (this.throttleBlend || 0) +
+      ((wantThrottle) - (this.throttleBlend || 0)) * Math.min(1, 6 * dt);
+
     this.maxSpeed = Math.max(this.maxSpeed, this.speed);
     if (this.offroad < 0.1 && this.stunned <= 0) this.cleanTime += dt;
 
@@ -151,12 +188,15 @@ export class Vehicle {
       const curve = track.curveAt(this.t);
       const ideal = THREE.MathUtils.clamp(-curve * 26, -half * 0.55, half * 0.55);
       const pull = (ideal - this.lat) / Math.max(1, half);
-      steer += pull * 0.34 * this.assist * (1 - Math.abs(input.steerRaw) * 0.75);
+      steer -= pull * 0.34 * this.assist * (1 - Math.abs(input.steerRaw) * 0.75);
     }
 
     const turn = s.turn * (1 - 0.28 * Math.min(1, this.speed / s.topSpeed));
-    const desired = steer * turn * 34 * speedK;
-    const grip = s.grip * (this.offroad ? 0.45 : 1) * (this.airborne ? 0.25 : 1);
+    // lat is measured to the left of the centre line, so a positive steer
+    // input (D, right) has to push it negative. This one sign was why steering
+    // felt inverted.
+    const desired = -steer * turn * 34 * speedK;
+    const grip = s.grip * (this.offroad ? 0.45 : 1) * (this.airborne ? 0.25 : 1) * (this.slipping > 0 ? 0.22 : 1);
     this.latVel += (desired - this.latVel) * Math.min(1, grip * dt);
 
     // banking pushes you downhill on a cambered corner, which is free feel
@@ -164,13 +204,17 @@ export class Vehicle {
 
     this.lat += this.latVel * dt;
 
-    // walls. soft in the assist zone, hard past it.
-    const wall = half * 1.55;
+    // Hard barrier. The road is fenced on both sides now, so this is a wall she
+    // scrapes along rather than a suggestion she can drive through.
+    const wall = half * 1.02;
     if (Math.abs(this.lat) > wall) {
       this.lat = Math.sign(this.lat) * wall;
-      this.latVel *= -0.28;
-      this.speed *= 0.965;
+      this.latVel *= -0.18;
+      this.speed *= 0.985;
+      this.scraping = 0.2;
       if (ctx.onScrape) ctx.onScrape(this);
+    } else if (this.scraping > 0) {
+      this.scraping -= dt;
     }
 
     // ---- vertical ----
@@ -190,13 +234,18 @@ export class Vehicle {
     this.deltaT = this.t - prevT;
 
     // ---- visual state ----
-    const driftTarget = THREE.MathUtils.clamp(-this.latVel / 26, -0.75, 0.75);
-    this.drift += (driftTarget - this.drift) * Math.min(1, 8 * dt);
+    if (this.spinOut > 0) {
+      this.drift += dt * 11 * (this.spinDir || 1);
+    } else {
+      const driftTarget = THREE.MathUtils.clamp(-this.latVel / 26, -0.75, 0.75);
+      this.drift += (driftTarget - this.drift) * Math.min(1, 8 * dt);
+      if (Math.abs(this.drift) > Math.PI) this.drift -= Math.sign(this.drift) * Math.PI * 2;
+    }
     const leanTarget = s.ride === 'bike'
       ? THREE.MathUtils.clamp(this.latVel / 20, -0.62, 0.62)
       : THREE.MathUtils.clamp(-this.latVel / 44, -0.26, 0.26);
     this.lean += (leanTarget - this.lean) * Math.min(1, 6 * dt);
-    const pitchTarget = THREE.MathUtils.clamp((target - this.speed) / s.topSpeed * -0.30, -0.14, 0.14)
+    const pitchTarget = THREE.MathUtils.clamp((this.throttleBlend - 0.5) * -0.16, -0.14, 0.14)
       + (this.airborne ? -0.10 : 0);
     this.pitch += (pitchTarget - this.pitch) * Math.min(1, 5 * dt);
     this.bob += dt * (4 + this.speed * 0.06);
@@ -213,7 +262,7 @@ export class Vehicle {
 
     t.tanAt(this.t, _v);
     t.upAt(this.t, _v2);
-    _v3.crossVectors(_v2, _v).normalize();      // right
+    _v3.crossVectors(_v2, _v).normalize();      // local +X
     _v2.crossVectors(_v, _v3).normalize();      // orthonormal up
 
     _m.makeBasis(_v3, _v2, _v);                 // local z points down the road

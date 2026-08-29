@@ -39,14 +39,22 @@ If you would rather not use Actions, the branch method still works: Source
 
 | | |
 |---|---|
-| Steer | Arrow keys or **A** / **D** |
+| Accelerate | **W** or **Up** |
+| Brake and reverse | **S** or **Down** |
+| Steer | **A** / **D** or **Left** / **Right** |
 | Boost | **Shift** |
 | Ability | **Space** |
-| Item | **E** |
+| Use item | **E** |
+| Look behind (hold) | **C** or right mouse button |
 | Skip a cinematic | **Esc** |
 
-Gamepad works too. The throttle is automatic and the steering has a generous
-assist, so it plays fine for someone who has never held a controller.
+Gamepad works too: right trigger accelerates, left trigger brakes, left stick
+steers, right bumper boosts, A fires the ability, X uses the item and left
+bumper looks behind.
+
+Let go of everything and the car coasts down to a comfortable pace rather than
+stopping dead, so it never strands anyone who has not held a controller before.
+Pressing W is still meaningfully faster.
 
 ---
 

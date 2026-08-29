@@ -18,31 +18,48 @@ import { TRACK, SECTORS, sectorAt } from '../config.js';
 
 const SCALE = 0.8;
 
+// The left hand thread. It has to arrive at the heart's left point travelling
+// in the +Z direction, which is why it swings down and comes back up.
 function threadIn() {
   return [
-    [-12800, 2600], [-11600, 1800], [-10300, 2500], [-9000, 3300],
-    [-7700, 2600], [-6500, 1400], [-5400, 1900], [-4400, 2700],
-    [-3600, 2600], [-2900, 1900], [-2500, 1000], [-2450, 300]
+    [-13400, 1400], [-12200, 2400], [-10900, 2900], [-9500, 2400],
+    [-8300, 1200], [-7100, 100], [-5900, -700], [-4700, -1100],
+    [-3700, -1000], [-3100, -500], [-2880, 200]
   ];
 }
 
+// And the right hand one leaves the heart's right point travelling in -Z.
 function threadOut() {
   return [
-    [3000, 900], [3600, 1900], [4700, 2450], [6000, 2400], [7200, 1800],
-    [8100, 800], [8700, -400], [8900, -1600], [8300, -2300], [7500, -2350]
+    [2880, 100], [3100, -700], [3700, -1500], [4700, -2000],
+    [5900, -2100], [7000, -1700], [7900, -900], [8400, 200],
+    [8400, 1300], [7800, 2000], [7000, 2100]
   ];
 }
 
-// r = R(u) * (1 + depth * cos(petals * theta))
-function knotPoints(steps) {
+// ---------------------------------------------------------------------------
+// The knot is a heart.
+//
+// The classic parametric heart, traversed one and a half times. Entering at the
+// left point and leaving one and a half turns later puts the exit at the right
+// point, and the half turn of overlap is exactly what the height spiral turns
+// into over and under passes. The cusp at the bottom becomes a hairpin, which
+// is the best corner on the track.
+// ---------------------------------------------------------------------------
+function heartPoints(steps) {
   const out = [];
-  const { knotRadius: R0, knotPinch, knotPetals, knotPetalDepth } = TRACK;
+  const S = TRACK.heartScale;
+  const start = -Math.PI / 2;                 // the left point
   for (let i = 0; i <= steps; i++) {
     const u = i / steps;
-    const th = Math.PI + u * Math.PI * 3;               // one and a half turns
-    const R = R0 - knotPinch * Math.sin(u * Math.PI);   // pinches in at the core
-    const r = R * (1 + knotPetalDepth * Math.cos(knotPetals * th));
-    out.push([r * Math.cos(th), r * Math.sin(th)]);
+    const th = start + u * Math.PI * 3;       // one and a half turns
+    // the second lap is drawn a little smaller, so the two passes sit inside
+    // one another rather than fighting for the same ground
+    const k = S * (1 - 0.16 * Math.min(1, Math.max(0, (u - 0.30) / 0.70)));
+    const x = 16 * Math.pow(Math.sin(th), 3);
+    const y = 13 * Math.cos(th) - 5 * Math.cos(2 * th)
+            - 2 * Math.cos(3 * th) - Math.cos(4 * th);
+    out.push([x * k, y * k]);
   }
   return out;
 }
@@ -88,7 +105,7 @@ export class Track {
     // ---- flat plan of the rakhi, in XZ ----
     const plan = [];
     for (const p of threadIn()) plan.push(p);
-    const knot = knotPoints(420);
+    const knot = heartPoints(460);
     for (let i = 1; i < knot.length; i++) plan.push(knot[i]);
     for (const p of threadOut()) plan.push(p);
 
@@ -123,6 +140,9 @@ export class Track {
       const a = pts[Math.max(0, i - 1)], b = pts[Math.min(N, i + 1)];
       const t = new THREE.Vector3().subVectors(b, a).normalize();
       tan.push(t);
+      // Careful: this is the vehicle's local +X, which for an object facing
+      // +Z is its LEFT. Positive `lat` therefore means left of the centre line.
+      // The steering input is negated in the vehicle to account for it.
       const n = new THREE.Vector3().crossVectors(WORLD_UP, t).normalize();
       nrm.push(n);
     }
@@ -305,3 +325,81 @@ export function buildRoadMesh(track) {
   return g;
 }
 
+
+
+// ---------------------------------------------------------------------------
+// Barriers.
+//
+// A continuous rail down both edges with posts at intervals, built as one mesh
+// so thirty kilometres of fence costs a single draw call. It matches the hard
+// wall in the vehicle exactly, so what she can see is what she can hit.
+// ---------------------------------------------------------------------------
+const _tmpCol = new THREE.Color();
+
+export function buildBarriers(track) {
+  const N = track.samples;
+  const STRIDE = 3;
+  const pos = [], col = [], idx = [];
+  const cBand = new THREE.Color(), cDark = new THREE.Color(), cCap = new THREE.Color();
+  const p = new THREE.Vector3();
+
+  // A guard rail, not a wall. One striped band held up on posts, with a bright
+  // line along the top. Open underneath so the roadside is still visible, but
+  // unmissable in peripheral vision, which is the only place you ever see the
+  // edge of a road from at this speed.
+  const RAIL_LO = 1.2, RAIL_HI = 3.4, CAP_HI = 4.0, POST_LO = -2.6, LAT = 1.06;
+  const vert = (x, y, z, r, g2, b) => { pos.push(x, y, z); col.push(r, g2, b); return pos.length / 3 - 1; };
+  const quad = (a, b, d, e) => { idx.push(a, d, b, b, d, e, b, d, a, e, d, b); };
+
+  for (const side of [-1, 1]) {
+    let prev = null;
+    for (let r = 0; r * STRIDE <= N; r++) {
+      const i = Math.min(N, r * STRIDE);
+      const sec = sectorAt(i / N);
+      // striped by distance so the bands stay the same length whatever the
+      // sampling works out to, and dark against bright rather than two pale
+      // colours, which just averaged out to grey at a distance
+      const band = Math.floor(track.dist[i] / 17) % 2 === 0;
+      cDark.setHex(sec.road).multiplyScalar(0.85);
+      cBand.copy(band ? _tmpCol.setHex(sec.kerbA) : cDark);
+      cCap.setHex(sec.kerbB);
+
+      const half = track.half[i];
+      const base = track.pts[i], nrm = track.nrm[i], up = track.up[i];
+      const at = (y, cc, mul) => vert(
+        ...p.copy(base).addScaledVector(nrm, half * LAT * side).addScaledVector(up, y).toArray(),
+        cc.r * mul, cc.g * mul, cc.b * mul);
+
+      const row = [
+        at(RAIL_LO, cBand, 0.72), at(RAIL_HI, cBand, 1.15),
+        at(RAIL_HI, cCap, 1.0), at(CAP_HI, cCap, 1.25)
+      ];
+      if (prev) for (let k = 0; k < 4; k += 2) quad(prev[k], prev[k + 1], row[k], row[k + 1]);
+      prev = row;
+
+      // a post every so often, dropping past the kerb toward the ground
+      if (i % 24 === 0) {
+        const pv = [];
+        for (const dz of [-0.55, 0.55]) {
+          for (const y of [POST_LO, CAP_HI]) {
+            pv.push(vert(
+              ...p.copy(base)
+                .addScaledVector(nrm, half * LAT * side)
+                .addScaledVector(track.tan[i], dz)
+                .addScaledVector(up, y).toArray(),
+              cDark.r * 0.7, cDark.g * 0.7, cDark.b * 0.7));
+          }
+        }
+        quad(pv[0], pv[1], pv[2], pv[3]);
+      }
+    }
+  }
+
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  g.computeBoundingSphere();
+  return g;
+}

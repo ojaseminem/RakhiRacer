@@ -69,13 +69,13 @@ export const SECTORS = [
     name: 'THE FAMILY VOLCANO',
     kicker: 'SECTOR 4',
     from: 0.520, to: 0.700,
-    sky: [0x120610, 0x5c1418, 0xff8320],
-    fog: 0x2a0d12, fogNear: 200, fogFar: 2200, haze: 0.5,
-    road: 0x140d13, kerbA: 0xff5a14, kerbB: 0xffc93d,
-    ground: 0x120a0e, rim: 0xff9a3d, rimI: 0.55,
+    sky: [0x150620, 0x521a4e, 0xff7a4a],
+    fog: 0x2a0d24, fogNear: 200, fogFar: 2200, haze: 0.5,
+    road: 0x180d1c, kerbA: 0xff5a3d, kerbB: 0xffb84a,
+    ground: 0x160a16, rim: 0xff8adc, rimI: 0.55,
     sun: 0xffab48, sunI: 1.30, sunPos: [-0.5, 0.34, -0.62],
-    amb: 0x5c1c24, ambI: 0.42,
-    shadowTint: 0x3d0f1e, shadowAmt: 0.5, skyTint: 0xff7a3d, skyAmt: 0.24,
+    amb: 0x4a1a44, ambI: 0.42,
+    shadowTint: 0x4a1252, shadowAmt: 0.5, skyTint: 0xc46aff, skyAmt: 0.24,
     music: 'dread'
   },
   {
@@ -84,13 +84,15 @@ export const SECTORS = [
     name: 'THE UNDERGROUND',
     kicker: 'SECTOR 5',
     from: 0.700, to: 0.870,
-    sky: [0x02060c, 0x061420, 0x0d2c38],
-    fog: 0x04101a, fogNear: 160, fogFar: 1500, haze: 0.34,
-    road: 0x18242f, kerbA: 0x1fe8d4, kerbB: 0xff2f6b,
-    ground: 0x060c12, rim: 0x4affe8, rimI: 0.58,
-    sun: 0x9fe8ff, sunI: 1.05, sunPos: [0.2, 0.9, 0.1],
-    amb: 0x14485c, ambI: 0.55,
-    shadowTint: 0x06212e, shadowAmt: 0.58, skyTint: 0x2fd0e0, skyAmt: 0.2,
+    // dark, but the road still has to be readable at two hundred and sixty. The
+    // first pass at this was so dark the tarmac vanished under the car.
+    sky: [0x0a0618, 0x1c1038, 0x3a1a5e],
+    fog: 0x120a26, fogNear: 200, fogFar: 1700, haze: 0.30,
+    road: 0x2e2748, kerbA: 0xb06aff, kerbB: 0xff3d8a,
+    ground: 0x140c26, rim: 0xc48aff, rimI: 0.78,
+    sun: 0xb8ecff, sunI: 1.35, sunPos: [0.2, 0.9, 0.1],
+    amb: 0x2a5c78, ambI: 0.82,
+    shadowTint: 0x271552, shadowAmt: 0.48, skyTint: 0x9a6cff, skyAmt: 0.24,
     music: 'dread'
   },
   {
@@ -129,7 +131,7 @@ export const VEHICLES = [
     body: 0xe8203f, accent: 0xfff0d0, glow: 0xff6a4a, trail: 0xff9e3d,
     stats: [['SPEED', 5], ['ACCELERATION', 5], ['WEIGHT', 2], ['HANDLING', 1]],
     // physics
-    topSpeed: 92, accel: 46, brake: 60, grip: 5.6, turn: 1.55, mass: 0.8,
+    topSpeed: 92, accel: 48, brake: 34, grip: 5.6, turn: 1.55, mass: 0.8,
     boostMul: 1.62, boostTime: 2.4, boostDrain: 34, boostRegen: 12,
     ability: {
       name: 'NITRO BURST',
@@ -147,7 +149,7 @@ export const VEHICLES = [
     blurb: 'Massive. Chunky. Comically oversized. It does not avoid things, it removes them.',
     body: 0xffb01f, accent: 0x2bb8a8, glow: 0xffd84a, trail: 0xffc93d,
     stats: [['ATTACK', 5], ['DEFENSE', 4], ['WEIGHT', 5], ['SPEED', 3]],
-    topSpeed: 74, accel: 30, brake: 46, grip: 7.4, turn: 1.15, mass: 2.4,
+    topSpeed: 78, accel: 34, brake: 30, grip: 7.4, turn: 1.15, mass: 2.4,
     boostMul: 1.44, boostTime: 2.8, boostDrain: 28, boostRegen: 14,
     ability: {
       name: 'FAMILY FURY',
@@ -165,7 +167,7 @@ export const VEHICLES = [
     blurb: 'One rider. Glowing wheels. Long body, neon trails, and it floats a little off the road.',
     body: 0x18c8ff, accent: 0xfff2ff, glow: 0x6affff, trail: 0x39e6ff,
     stats: [['HANDLING', 5], ['SPEED', 4], ['BOOST', 4], ['WEIGHT', 2]],
-    topSpeed: 85, accel: 40, brake: 55, grip: 9.2, turn: 2.05, mass: 0.7,
+    topSpeed: 86, accel: 44, brake: 32, grip: 9.2, turn: 2.05, mass: 0.7,
     boostMul: 1.55, boostTime: 3.2, boostDrain: 26, boostRegen: 16,
     ability: {
       name: 'PHASE DASH',
@@ -181,13 +183,25 @@ export const VEHICLES = [
 // FAMILY POWER-UPS
 // ---------------------------------------------------------------------------
 export const ITEMS = [
-  { id: 'sugar',  name: 'SUGAR RUSH',        glyph: 'S', color: 0xff4f9b, kind: 'self',    weight: 22 },
-  { id: 'cracker',name: 'FAMILY FIRECRACKER',glyph: 'F', color: 0xff8a1f, kind: 'drop',    weight: 20 },
-  { id: 'magnet', name: 'RELATIVE MAGNET',   glyph: 'M', color: 0x7a5cff, kind: 'field',   weight: 14 },
-  { id: 'blessing',name:'MOM’S BLESSING',glyph: 'B', color: 0xffd23d, kind: 'self',    weight: 14 },
-  { id: 'thread', name: 'RAKHI THREAD',      glyph: 'T', color: 0xff2f6b, kind: 'tether',  weight: 16 },
-  { id: 'bonk',   name: 'BROTHER’S BONK',glyph: 'K', color: 0x2be0c0, kind: 'forward', weight: 14 }
+  { id:'sugar',   name:'SUGAR RUSH',      glyph:'S', color:0xff4f9b, weight:16,
+    blurb:'Everything goes faster for four seconds.' },
+  { id:'banana',  name:'BANANA PEEL',     glyph:'B', color:0xffd23d, weight:20,
+    blurb:'Drops behind you. Whoever touches it spins.' },
+  { id:'bazooka', name:'CHAPPAL BAZOOKA', glyph:'Z', color:0xff5a2b, weight:16,
+    blurb:'A homing slipper. It finds whoever is ahead of you.' },
+  { id:'slick',   name:'GHEE SLICK',      glyph:'G', color:0xffe08a, weight:16,
+    blurb:'A wide slippery patch behind you. Nobody steers on it.' },
+  { id:'blessing',name:'MOM\u2019S BLESSING', glyph:'M', color:0xffd23d, weight:10,
+    blurb:'Six seconds where nothing can touch you and everything you touch flies.' },
+  { id:'thread',  name:'RAKHI THREAD',    glyph:'T', color:0xff2f6b, weight:12,
+    blurb:'A glowing tether snaps onto the racer ahead and reels you in.' },
+  { id:'bonk',    name:'BROTHER\u2019S BONK', glyph:'K', color:0x2be0c0, weight:12,
+    blurb:'A giant boxing glove on a spring. Ridiculous. Effective.' },
+  { id:'thunder', name:'THUNDER CLAP',    glyph:'!', color:0x8f6aff, weight:8,
+    blurb:'Every single relative ahead of you gets hit at once.' }
 ];
+
+
 
 // ---------------------------------------------------------------------------
 // THE FAMILY
@@ -272,10 +286,9 @@ export const ELIMINATIONS = [
 export const TRACK = {
   // sampled control points, in world units
   threadInLength: 10200,
-  knotRadius: 2450,
-  knotPinch: 980,
-  knotPetals: 6,
-  knotPetalDepth: 0.155,
+  // the heart in the middle of the rakhi. 16 units wide in the parametric
+  // curve, so this is metres per unit.
+  heartScale: 190,
   threadOutLength: 4600,
   roadHalfWidth: 11.5,
   // the gap in sector 2 that most of the family does not clear

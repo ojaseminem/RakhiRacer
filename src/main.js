@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { SECTORS, VEHICLES, sectorAt } from './config.js';
-import { Track, buildRoadMesh } from './world/track.js';
+import { Track, buildRoadMesh, buildBarriers } from './world/track.js';
 import { makeToon, makeSky, blendSector, syncLighting } from './art/materials.js';
 import { HERO_BUILDERS } from './art/build.js';
 import { loadDropInModels, anyModelsLoaded } from './art/assets.js';
@@ -93,6 +93,16 @@ const road = new THREE.Mesh(buildRoadMesh(track), roadMat);
 road.receiveShadow = true;
 scene.add(road);
 
+// a fence down both sides, matching the hard wall in the vehicle exactly, so
+// what she can see is what she can hit
+const barrierMat = makeToon({
+  vertexColors: true, rim: 0xffffff, rimStrength: 0.22, rimPower: 3.6,
+  side: THREE.DoubleSide, noise: 0.04, bounceStrength: 0.18
+});
+const barriers = new THREE.Mesh(buildBarriers(track), barrierMat);
+barriers.receiveShadow = true;
+scene.add(barriers);
+
 setStatus('building a city');
 const world = buildWorld(scene, track);
 
@@ -101,6 +111,65 @@ const speedLines = makeSpeedLines();
 scene.add(speedLines);
 
 const post = makePost(renderer, scene, camera);
+
+// ---------------------------------------------------------------------------
+// The inset view.
+//
+// Hold C and it shows what is behind her. During the underground sequence,
+// where the main camera turns around to watch the world end, it flips and shows
+// the road AHEAD instead, so she can still steer while she watches. Either way
+// her own vehicle is in the picture, which is what stops the whole thing being
+// disorienting.
+//
+// It renders straight into a viewport after the composer has finished, so it
+// costs one extra scene pass and no post processing.
+// ---------------------------------------------------------------------------
+const insetCam = new THREE.PerspectiveCamera(58, 16 / 9, 0.5, 12000);
+const _ip = new THREE.Vector3(), _il = new THREE.Vector3();
+
+function updateInset(dt) {
+  const P = race.player;
+  if (!P || !P.group.visible) return null;
+  const racing = State === 'hud' || State === 'none';
+  if (!racing || race.state === 'reveal') return null;
+
+  const rear = !race.reverse && Input.look;
+  const front = race.reverse;
+  if (!rear && !front) return null;
+
+  const L = track.length;
+  if (rear) {
+    // sit a little in front of her, looking back down the road past her roof
+    track.posAt(Math.min(1, P.t + 11 / L), P.lat * 0.8, 4.2, _ip);
+    track.posAt(Math.max(0, P.t - 46 / L), P.lat * 0.4, 2.4, _il);
+  } else {
+    // sit behind her, looking the way she is actually going
+    track.posAt(Math.max(0, P.t - 12 / L), P.lat * 0.8, 4.4, _ip);
+    track.posAt(Math.min(1, P.t + 70 / L), P.lat * 0.4, 3.0, _il);
+  }
+  insetCam.position.copy(_ip);
+  insetCam.up.set(0, 1, 0);
+  insetCam.lookAt(_il);
+  return rear ? 'LOOKING BACK' : 'THE ROAD AHEAD';
+}
+
+function renderInset() {
+  const w = renderer.domElement.width, h = renderer.domElement.height;
+  const iw = Math.round(w * 0.26), ih = Math.round(iw * 9 / 16);
+  const x = Math.round(w * 0.5 - iw * 0.5);
+  const y = Math.round(h - ih - 24 * renderer.getPixelRatio());
+  insetCam.aspect = iw / ih;
+  insetCam.updateProjectionMatrix();
+  renderer.autoClear = false;
+  renderer.setViewport(x, y, iw, ih);
+  renderer.setScissor(x, y, iw, ih);
+  renderer.setScissorTest(true);
+  renderer.clearDepth();
+  renderer.render(scene, insetCam);
+  renderer.setScissorTest(false);
+  renderer.setViewport(0, 0, w, h);
+  renderer.autoClear = true;
+}
 const hud = new HUD();
 const director = new Director(camera, track);
 
@@ -234,10 +303,14 @@ function showResults(res) {
 // past the finish line the world goes away. after eleven minutes of everything
 // collapsing, an empty platform and two people is the effect.
 function clearWorldForEnding() {
-  for (const k of ['blocks', 'cyls', 'cones', 'blobs', 'neon', 'clouds', 'ground']) {
-    if (world[k]) world[k].visible = false;
+  // every instanced layer by name. an older version of this list used names
+  // the world builder does not use any more, so half the scenery stayed up
+  // through the ending and the platform was floating in a city.
+  for (const k of Object.keys(world)) {
+    if (world[k] && world[k].isObject3D) world[k].visible = false;
   }
   road.visible = false;
+  barriers.visible = false;
   race.finishGate.visible = false;
   race.boss.group.visible = false;
   for (const r of race.pack.racers) r.group.visible = false;
@@ -255,10 +328,11 @@ function clearWorldForEnding() {
 }
 
 function restoreWorld() {
-  for (const k of ['blocks', 'cyls', 'cones', 'blobs', 'neon', 'clouds', 'ground']) {
-    if (world[k]) world[k].visible = true;
+  for (const k of Object.keys(world)) {
+    if (world[k] && world[k].isObject3D) world[k].visible = true;
   }
   road.visible = true;
+  barriers.visible = true;
   race.items.mesh.visible = true;
   race.items.core.visible = true;
   for (const r of race.pack.racers) r.group.visible = true;
@@ -273,6 +347,7 @@ function playEnding() {
     setTimeout(() => {
       race.revealMesh.material.opacity = 0;
       race.revealMesh.visible = false;
+      race.heartGlow.visible = false;
       clearWorldForEnding();
       rakhiScene.group.visible = true;
       if (race.player) race.player.group.visible = false;
@@ -501,6 +576,11 @@ function frame(now) {
 
   vfx.update(dt);
   post.render(dt);
+
+  const insetLabel = updateInset(dt);
+  hud.inset(!!insetLabel, insetLabel || undefined);
+  if (insetLabel) renderInset();
+
   Input.clearAny();
 }
 
@@ -532,7 +612,7 @@ if (DEV) {
   director.snapTo(wp.clone().addScaledVector(track.tanAt(t), -13).add(new THREE.Vector3(0, 4.5, 0)), wp);
   const d = 1 / 60;
   for (let i2 = 0; i2 < parseInt(qs.get('warm') || '90'); i2++) {
-    race.player.update(d, { steer: 0, steerRaw: 0, boost: false, brake: false });
+    race.player.update(d, { steer: 0, steerRaw: 0, throttle: 1, brake: 0, boost: false });
     director.update(d, race.player);
   }
   if (qs.has('boss')) race.startBoss();
@@ -543,4 +623,4 @@ if (DEV) {
 
 requestAnimationFrame(frame);
 
-window.RAKHI = { scene, camera, track, director, post, race, vfx, audio, playEnding, startRace, setScreen };
+window.RAKHI = { scene, camera, track, director, post, race, vfx, audio, playEnding, startRace, setScreen, rakhiScene, clearWorldForEnding, playRakhiScene, hud };

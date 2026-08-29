@@ -32,6 +32,68 @@ export const GIFT = {
   from: 'from your brother'
 };
 
+
+// ---------------------------------------------------------------------------
+// Floating name tags. Canvas text on a sprite, so it always faces the camera
+// and the type matches the rest of the game. Drawn twice: once immediately so
+// something is there, once more after the webfont finishes loading.
+// ---------------------------------------------------------------------------
+function nameTag(name, sub, color) {
+  const W = 512, H = 200;
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+
+  const draw = () => {
+    ctx.clearRect(0, 0, W, H);
+    ctx.textAlign = 'center';
+
+    // the small word above, spaced out like a caption
+    ctx.font = '600 30px "Chakra Petch", system-ui, sans-serif';
+    ctx.letterSpacing = '10px';
+    ctx.fillStyle = 'rgba(255,235,200,0.72)';
+    ctx.fillText(sub.toUpperCase(), W / 2, 46);
+    ctx.letterSpacing = '0px';
+
+    // the name
+    ctx.font = '400 96px "Titan One", system-ui, sans-serif';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 14;
+    ctx.strokeStyle = 'rgba(14,4,20,0.92)';
+    ctx.strokeText(name, W / 2, 136);
+    const grad = ctx.createLinearGradient(0, 74, 0, 142);
+    grad.addColorStop(0, '#fffaf0');
+    grad.addColorStop(1, color);
+    ctx.fillStyle = grad;
+    ctx.fillText(name, W / 2, 136);
+
+    // a thin rule underneath, wide as the name
+    const w = Math.min(W - 60, ctx.measureText(name).width + 34);
+    const g2 = ctx.createLinearGradient(W / 2 - w / 2, 0, W / 2 + w / 2, 0);
+    g2.addColorStop(0, 'rgba(255,201,61,0)');
+    g2.addColorStop(0.5, 'rgba(255,201,61,0.95)');
+    g2.addColorStop(1, 'rgba(255,201,61,0)');
+    ctx.fillStyle = g2;
+    ctx.fillRect(W / 2 - w / 2, 158, w, 4);
+
+    tex.needsUpdate = true;
+  };
+
+  draw();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw).catch(() => {});
+
+  const spr = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: tex, transparent: true, depthWrite: false, depthTest: false, toneMapped: false
+  }));
+  spr.renderOrder = 40;
+  spr.scale.set(9.2, 3.6, 1);
+  spr.material.opacity = 0;
+  return spr;
+}
+
 // ---------------------------------------------------------------------------
 // The scene. A quiet platform past the finish line. No explosions, no camera
 // shake. After eleven minutes of the world ending, stillness is the effect.
@@ -113,15 +175,23 @@ export function buildRakhiScene(scene, track, t = 0.9985) {
   rakhi.position.set(0, 8.5, 1.5);
   g.add(rakhi);
 
+  // who is who. She has never seen his avatar before, so it gets a name.
+  const bTag = nameTag('OJAS', 'brother', '#8fd0ff');
+  bTag.position.set(0, 5.5, 8);
+  g.add(bTag);
+  const sTag = nameTag('AYUSHI', 'sister', '#ffa8cf');
+  sTag.position.set(0, 5.5, -11);
+  g.add(sTag);
+
   scene.add(g);
-  return { group: g, brother, sister, gift, rakhi, ring, bShade, sShade, at: t };
+  return { group: g, brother, sister, gift, rakhi, ring, bShade, sShade, bTag, sTag, at: t };
 }
 
 // ---------------------------------------------------------------------------
 // The choreography. Sister walks in, he walks over, he hands it across.
 // ---------------------------------------------------------------------------
 export function playRakhiScene(sceneRefs, director, hud, onDone) {
-  const { group, brother, sister, gift, rakhi, bShade, sShade } = sceneRefs;
+  const { group, brother, sister, gift, rakhi, bShade, sShade, bTag, sTag } = sceneRefs;
   const worldOf = (obj) => obj.getWorldPosition(new THREE.Vector3());
 
   let time = 0;
@@ -158,6 +228,18 @@ export function playRakhiScene(sceneRefs, director, hud, onDone) {
       gift.position.z = 1.4 - c * 2.2;
       gift.position.y = 3.0 + Math.sin(c * Math.PI) * 1.0;
       gift.rotation.y = c * Math.PI * 0.6;
+
+      // tags ride above their heads and fade up once each of them has stopped
+      if (bTag) {
+        bTag.position.z = brother.position.z;
+        bTag.position.y = 5.5 + Math.sin(t * 1.1) * 0.16;
+        bTag.material.opacity = THREE.MathUtils.smoothstep(t, 1.4, 3.0);
+      }
+      if (sTag) {
+        sTag.position.z = sister.position.z;
+        sTag.position.y = 5.5 + Math.sin(t * 1.1 + 1.7) * 0.16;
+        sTag.material.opacity = THREE.MathUtils.smoothstep(t, 2.6, 4.4);
+      }
 
       rakhi.rotation.y = t * 0.35;
       rakhi.position.y = 15 + Math.sin(t * 0.8) * 0.8;

@@ -126,14 +126,16 @@ export class Director {
 
     // when the camera flips, it sits in front of her looking back down the road
     if (this.reverseBlend > 0.001) {
-      const fwd = p.t + (this.dist * 0.85 / track.length);
+      const fwd = p.t + (this.dist * 1.9 / track.length);
       track.posAt(Math.min(1, fwd), p.lat * 0.7, 0, _r);
       track.upAt(Math.min(1, fwd), _q);
-      _r.addScaledVector(_q, this.height * 0.9 + p.airY * 0.85);
+      _r.addScaledVector(_q, this.height * 1.15 + p.airY * 0.85);
       _p.lerp(_r, this.reverseBlend);
 
-      const behind = Math.max(0, p.t - this.lookAhead * 26);
-      track.posAt(behind, p.lat * 0.4, 3.0, _tmp);
+      // aim just past her rather than at the far horizon, so she stays in the
+      // middle of the shot with the collapse happening behind her
+      const behind = Math.max(0, p.t - 34 / track.length);
+      track.posAt(behind, p.lat * 0.7, 2.6, _tmp);
       _look.lerp(_tmp, this.reverseBlend);
     }
 

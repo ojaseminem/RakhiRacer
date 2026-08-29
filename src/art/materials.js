@@ -159,8 +159,7 @@ export function makeToon(opts = {}) {
     emissive: opts.emissive ?? 0x000000,
     side: opts.side ?? THREE.FrontSide,
     depthWrite: opts.depthWrite !== false,
-    fog: opts.fog !== false,
-    flatShading: !!opts.flatShading
+    fog: opts.fog !== false
   });
 
   const u = {
@@ -279,7 +278,7 @@ export function makeSky() {
       uHaze: { value: new THREE.Color(0xffffff) },
       uSun: { value: new THREE.Vector3(0.4, 0.8, 0.35) },
       uSunColor: { value: new THREE.Color(0xfff2d0) },
-      uSunSize: { value: 0.9955 },
+      uSunSize: { value: 0.99885 },
       uHazeAmt: { value: 0.55 }
     },
     vertexShader: /* glsl */`
@@ -312,9 +311,12 @@ export function makeSky() {
 
         vec3 sd = normalize(uSun);
         float s = dot(d, sd);
-        c += uSunColor * smoothstep(uSunSize, 1.0, s) * 1.35;        // the disc
-        c += uSunColor * pow(max(s, 0.0), 10.0) * 0.16;              // close halo
-        c += uSunColor * pow(max(s, 0.0), 3.0) * 0.06;               // wide glow
+        // a small hard core with a wide soft falloff. the old disc was big and
+        // bright enough that bloom smeared it into a white hole in the sky.
+        c += uSunColor * smoothstep(uSunSize, 1.0, s) * 0.85;        // the disc
+        c += uSunColor * pow(max(s, 0.0), 22.0) * 0.34;              // tight halo
+        c += uSunColor * pow(max(s, 0.0), 6.0) * 0.14;               // close glow
+        c += uSunColor * pow(max(s, 0.0), 2.2) * 0.05;               // wide glow
 
         // a touch of dither kills the banding a wide gradient always shows
         c += (dither(gl_FragCoord.xy) - 0.5) * 0.006;

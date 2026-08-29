@@ -42,6 +42,9 @@ export class Relative {
     this.barkCool = 2 + Math.random() * 6;
 
     // where on the road this one likes to sit
+    this.role = 'pack';     // pack | ahead | duel
+    this.beaten = false;
+    this.dropTimer = 0;     // when this one drops something behind it
     this.lane = (Math.random() * 2 - 1) * 0.62;
     this.laneTimer = 0;
     this.wobble = Math.random() * 100;
@@ -64,21 +67,35 @@ export class Relative {
     const half = track.halfAt(this.t);
 
     // ---- pace ----
-    // a light rubber band keeps the pack around the player so there is always
-    // someone to race, without ever making them feel unbeatable
-    const gap = (player.t - this.t) * track.length;      // positive means ahead of us
+    // The band is deliberately strong. A relative that falls two hundred metres
+    // behind is a relative you will never see again, and a race you are alone in
+    // is not a race. Everyone is pulled back toward the player, and the current
+    // duel opponent is pulled hardest of all.
+    const gap = (player.t - this.t) * track.length;      // positive: player is ahead
     let band = 1;
-    if (gap > 40) band = 1 + Math.min(0.20, gap / 2400);
-    else if (gap < -40) band = 1 - Math.min(0.18, -gap / 2600);
+    if (this.role === 'duel') {
+      // hold a fighting distance. ahead of her when she is behind, right on her
+      // shoulder when she is ahead, and never so far either way that she loses
+      // sight of who she is racing.
+      const want = this.beaten ? -90 : (gap > 0 ? -22 : 30);
+      const err = (want - gap);
+      band = 1 + THREE.MathUtils.clamp(err / 180, -0.45, 0.55);
+    } else if (this.role === 'ahead') {
+      band = 1 + THREE.MathUtils.clamp((gap - 90) / 900, -0.18, 0.30);
+    } else {
+      // strong, and not capped so tightly that a big gap can never close
+      if (gap > 25) band = 1 + Math.min(0.50, gap / 420);
+      else if (gap < -25) band = 1 - Math.min(0.52, -gap / 380);
+    }
 
-    let target = this.baseSpeed * (0.80 + d.skill * 0.26) * band;
+    let target = this.baseSpeed * (0.84 + d.skill * 0.24) * band;
     if (this.stun > 0) target *= 0.4;
 
     // corners slow them, more so if they are not very good
     const curve = Math.abs(track.curveAt(this.t));
     target *= 1 - Math.min(0.32, curve * (1.4 - d.skill));
 
-    this.speed += (target - this.speed) * Math.min(1, 2.2 * dt);
+    this.speed += (target - this.speed) * Math.min(1, (this.role === 'duel' ? 3.0 : 2.2) * dt);
 
     // ---- line ----
     this.laneTimer -= dt;
@@ -90,8 +107,10 @@ export class Relative {
 
     // the aggressive ones drift toward the player when they are close
     const dt2 = Math.abs(gap);
-    if (d.aggro > 0.3 && dt2 < 26) {
-      wantLat = wantLat * (1 - d.aggro) + player.lat * d.aggro;
+    const aggro = this.role === 'duel' ? Math.max(d.aggro, 0.7) : d.aggro;
+    if (aggro > 0.3 && dt2 < 34) {
+      // block the line she wants rather than just sitting in a lane
+      wantLat = wantLat * (1 - aggro) + player.lat * aggro;
     }
 
     // keep off each other
@@ -117,6 +136,15 @@ export class Relative {
 
     // ---- progress ----
     this.t += (this.speed * dt) / track.length;
+
+    // A soft leash. Beyond four hundred metres nobody is on screen anyway, and
+    // a relative that has genuinely vanished up the road is a relative she will
+    // never race again. Drift them back rather than let the gap run away.
+    const LEASH = 420 / track.length;
+    const rel = this.t - player.t;
+    if (rel > LEASH) this.t -= (rel - LEASH) * Math.min(1, 0.5 * dt);
+    else if (rel < -LEASH) this.t -= (rel + LEASH) * Math.min(1, 0.5 * dt);
+
     if (this.t > 1) this.t = 1;
 
     // ---- visuals ----
@@ -216,6 +244,12 @@ export class Pack {
     this.pending = ELIMINATIONS.map(e => ({ ...e, done: false }));
     this.eliminated = [];
     this.rival = this.byId.chachu;
+
+    // She beats them one at a time, weakest first, so the race escalates and
+    // Chachu is genuinely the last and hardest thing between her and Mom.
+    this.ladder = [...this.racers].sort((a, b) => a.def.skill - b.def.skill);
+    this.duel = null;
+    this.duelLead = 0;
   }
 
   reset(gridSpread = 1) {
@@ -234,9 +268,65 @@ export class Pack {
     });
     this.pending.forEach(p => { p.done = false; });
     this.eliminated = [];
+    this.racers.forEach(r => { r.role = 'pack'; r.beaten = false; });
+    this.duel = null;
+    this.duelLead = 0;
+  }
+
+  // -------------------------------------------------------------------------
+  // Duels. One relative at a time is the one she is actually racing. They hold
+  // a fighting distance, block her line and taunt. Hold a clear lead over them
+  // for a few seconds and they concede, and the next one up steps in.
+  // -------------------------------------------------------------------------
+  updateDuel(dt, player, hooks) {
+    const L = this.track.length;
+
+    if (!this.duel || !this.duel.alive || this.duel.beaten) {
+      const next = this.ladder.find(r => r.alive && !r.beaten);
+      if (next && next !== this.duel) {
+        if (this.duel) this.duel.role = 'pack';
+        this.duel = next;
+        this.duel.role = 'duel';
+        this.duelLead = 0;
+        this.duelTime = 0;
+        if (hooks.onDuelStart) hooks.onDuelStart(next);
+      } else if (!next) {
+        this.duel = null;
+      }
+    }
+
+    // everyone else: the three nearest ahead run interference, the rest pack up
+    const ahead = this.racers
+      .filter(r => r.alive && r !== this.duel && r.t > player.t)
+      .sort((a, b) => a.t - b.t);
+    for (const r of this.racers) if (r !== this.duel) r.role = 'pack';
+    for (let i = 0; i < Math.min(3, ahead.length); i++) ahead[i].role = 'ahead';
+
+    if (!this.duel) return;
+    this.duelTime = (this.duelTime || 0) + dt;
+
+    // Chachu is the scripted rival and goes down in the underground, so he
+    // holds the duel to the end rather than being ticked off like the others.
+    if (this.duel.def.rival) return;
+
+    // A minimum time on each one. Without it a good driver flushes the whole
+    // family inside ninety seconds and the rest of the race is empty road.
+    const gap = (player.t - this.duel.t) * L;      // positive: she is ahead
+    if (gap > 50 && this.duelTime > 34) {
+      this.duelLead += dt;
+      if (this.duelLead > 5.0) {
+        this.duel.beaten = true;
+        this.duel.role = 'pack';
+        if (hooks.onDuelWon) hooks.onDuelWon(this.duel);
+        this.duel = null;
+      }
+    } else {
+      this.duelLead = Math.max(0, this.duelLead - dt * 2);
+    }
   }
 
   update(dt, player, hooks = {}) {
+    this.updateDuel(dt, player, hooks);
     const ctx = { pack: this.racers };
     for (const r of this.racers) r.update(dt, player, ctx);
 
@@ -271,6 +361,21 @@ export class Pack {
         if (hooks.onBump) hooks.onBump(r);
       }
       if (r.barkCool <= 0 && hooks.onBark) { hooks.onBark(r, r.pickBark()); r.barkCool = 5; }
+    }
+
+    // ---- they fight back ----
+    // A relative just ahead of her will occasionally leave something on the
+    // road. It is the difference between overtaking and merely passing.
+    for (const r of this.racers) {
+      if (!r.alive) continue;
+      r.dropTimer -= dt;
+      const gap = (r.t - player.t) * this.track.length;
+      if (gap < 8 || gap > 220) continue;
+      if (r.dropTimer > 0) continue;
+      const chance = (r.role === 'duel' ? 0.55 : 0.16) * r.def.aggro;
+      if (Math.random() > chance * dt * 6) continue;
+      r.dropTimer = 6 + Math.random() * 8;
+      if (hooks.onRelativeDrop) hooks.onRelativeDrop(r);
     }
 
     // ---- idle chatter ----

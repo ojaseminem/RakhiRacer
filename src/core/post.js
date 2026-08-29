@@ -27,11 +27,11 @@ const GradeShader = {
     tDiffuse: { value: null },
 
     // grade
-    uLift: { value: new THREE.Vector3(0.0, 0.0, 0.012) },
+    uLift: { value: new THREE.Vector3(0.008, 0.008, 0.020) },
     uGamma: { value: new THREE.Vector3(1.0, 1.0, 1.0) },
     uGain: { value: new THREE.Vector3(1.04, 1.0, 0.98) },
-    uContrast: { value: 1.16 },
-    uSaturation: { value: 1.18 },
+    uContrast: { value: 1.10 },
+    uSaturation: { value: 1.13 },
     uShadowTone: { value: new THREE.Color(0x1b2a5c) },
     uHighTone: { value: new THREE.Color(0xffe8c4) },
     uToneAmt: { value: 0.16 },
@@ -174,6 +174,12 @@ export function makePost(renderer, scene, camera, opts = {}) {
     u: grade.uniforms,
     setAO(on) { if (gtao) gtao.enabled = on; },
     setSize(w, h) {
+      // The composer caches the pixel ratio it was built with. If the quality
+      // guard lowers the renderer's ratio and this is not pushed through, the
+      // render targets stay at the old size while the canvas gets smaller, and
+      // the finished frame lands as a black rectangle with the world showing
+      // around its edges. This one line is the whole fix.
+      composer.setPixelRatio(renderer.getPixelRatio());
       composer.setSize(w, h);
       bloom.setSize(w, h);
       if (gtao) gtao.setSize(w, h);
