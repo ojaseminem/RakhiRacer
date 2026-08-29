@@ -159,7 +159,10 @@ export class Relative {
     wantLat += Math.sin(this.wobble) * half * 0.22 * d.chaos;
 
     wantLat = THREE.MathUtils.clamp(wantLat, -half * 0.94, half * 0.94);
-    const steer = (wantLat - this.lat) * 0.9;
+    // rate limited so a relative changes lane at a believable speed instead of
+    // snapping across the road the instant it picks a new line
+    const maxLat = this.speed * 0.16;
+    const steer = THREE.MathUtils.clamp((wantLat - this.lat) * 0.9, -maxLat, maxLat);
     this.latVel += (steer - this.latVel) * Math.min(1, 4.5 * dt);
     this.lat += this.latVel * dt;
 
@@ -177,7 +180,11 @@ export class Relative {
     if (this.t > 1) this.t = 1;
 
     // ---- visuals ----
-    this.drift += (THREE.MathUtils.clamp(-this.latVel / 16, -0.5, 0.5) - this.drift) * Math.min(1, 7 * dt);
+    // point them along their own velocity, the same way she does. They were
+    // yawing away from where they were travelling, which is what made the
+    // whole field look like it was sliding sideways down the road.
+    const slip = Math.atan2(this.latVel, Math.max(10, this.speed));
+    this.drift += (THREE.MathUtils.clamp(slip, -0.55, 0.55) - this.drift) * Math.min(1, 9 * dt);
     this.lean += (THREE.MathUtils.clamp(-this.latVel / 30, -0.2, 0.2) - this.lean) * Math.min(1, 5 * dt);
     this.wheelSpin += this.speed * dt * 1.6;
 
@@ -199,14 +206,14 @@ export class Relative {
     _v2.crossVectors(_v, _v3).normalize();
     _m.makeBasis(_v3, _v2, _v);
     g.quaternion.setFromRotationMatrix(_m);
-    _e.set(0, this.drift * 0.5, -this.lean, 'YXZ');
+    _e.set(0, this.drift, -this.lean, 'YXZ');
     _q.setFromEuler(_e);
     g.quaternion.multiply(_q);
 
     const ws = g.userData.wheels || [];
     for (let i = 0; i < ws.length; i++) {
       ws[i].rotation.x = -this.wheelSpin / (ws[i].userData.radius || 0.5);
-      if (i < 2) ws[i].rotation.y = this.drift * 0.5;
+      if (i < 2) ws[i].rotation.y = this.drift * 0.8;
     }
   }
 

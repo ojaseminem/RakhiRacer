@@ -311,16 +311,7 @@ export class ItemField {
         break;
 
       case 'banana': {
-        const m = new THREE.Group();
-        // a peel, not a banana: three splayed strips
-        for (let i = 0; i < 3; i++) {
-          const s = new THREE.Mesh(rbox(0.5, 0.16, 2.2, 0.08), this.matBanana);
-          s.rotation.y = (i - 1) * 0.5;
-          s.position.z = 0.4;
-          s.rotation.x = -0.25;
-          m.add(s);
-        }
-        m.add(new THREE.Mesh(rbox(0.7, 0.3, 0.7, 0.14), this.matBanana));
+        const m = this.buildPeel();
         this.scene.add(m);
         this.dropHazard('banana', player.t - 0.0009, player.lat, m, 3.4, 26, 'you');
         A && A.itemDrop();
@@ -328,10 +319,9 @@ export class ItemField {
       }
 
       case 'slick': {
-        const m = new THREE.Mesh(new THREE.CircleGeometry(1, 20), this.matSlick);
-        m.rotation.x = -Math.PI / 2;
+        const m = this.buildSlick();
         this.scene.add(m);
-        this.dropHazard('slick', player.t - 0.0010, player.lat, m, 11, 22, 'you');
+        this.dropHazard('slick', player.t - 0.0010, player.lat, m, 8, 22, 'you');
         A && A.itemSplat();
         break;
       }
@@ -428,22 +418,13 @@ export class ItemField {
   // a relative leaving something on the road behind them
   dropFrom(racer, kind) {
     if (kind === 'banana') {
-      const m = new THREE.Group();
-      for (let i = 0; i < 3; i++) {
-        const sp = new THREE.Mesh(rbox(0.5, 0.16, 2.2, 0.08), this.matBanana);
-        sp.rotation.y = (i - 1) * 0.5;
-        sp.position.z = 0.4;
-        sp.rotation.x = -0.25;
-        m.add(sp);
-      }
-      m.add(new THREE.Mesh(rbox(0.7, 0.3, 0.7, 0.14), this.matBanana));
+      const m = this.buildPeel();
       this.scene.add(m);
       this.dropHazard('banana', racer.t - 0.0007, racer.lat, m, 3.4, 22, racer.def.title);
     } else {
-      const m = new THREE.Mesh(new THREE.CircleGeometry(1, 20), this.matSlick);
-      m.rotation.x = -Math.PI / 2;
+      const m = this.buildSlick();
       this.scene.add(m);
-      this.dropHazard('slick', racer.t - 0.0008, racer.lat, m, 9, 18, racer.def.title);
+      this.dropHazard('slick', racer.t - 0.0008, racer.lat, m, 7, 18, racer.def.title);
     }
   }
 
@@ -452,6 +433,40 @@ export class ItemField {
   // actually see in time to steer around it.
   // A spinning bracket that locks onto whoever a homing item has chosen. Fired
   // a slipper into the pack and had no idea where it went, was the note.
+
+  // ---- the things that end up on the road --------------------------------
+  // Both of these are built in one place now. The player's version and the
+  // relatives' version had drifted apart, and the peel in particular was small
+  // enough at two hundred and sixty that the first you knew of it was the spin.
+  buildPeel() {
+    const m = new THREE.Group();
+    for (let i = 0; i < 4; i++) {
+      const strip = new THREE.Mesh(rbox(0.85, 0.22, 3.4, 0.11), this.matBanana);
+      strip.rotation.y = (i - 1.5) * 0.44;
+      strip.position.z = 0.7;
+      strip.rotation.x = -0.30;
+      m.add(strip);
+    }
+    const core = new THREE.Mesh(rbox(1.25, 0.42, 1.25, 0.20), this.matBanana);
+    m.add(core);
+    return m;
+  }
+
+  buildSlick() {
+    const g = new THREE.Group();
+    // a body with a bright rim, rather than one flat additive disc that read
+    // as a light on the road instead of something on it
+    const pool = new THREE.Mesh(new THREE.CircleGeometry(1, 26), this.matSlick);
+    const rim = new THREE.Mesh(new THREE.RingGeometry(0.88, 1.0, 26), new THREE.MeshBasicMaterial({
+      color: 0xfff0c0, transparent: true, opacity: 0.8, depthWrite: false,
+      toneMapped: false, side: THREE.DoubleSide
+    }));
+    rim.position.y = 0.01;
+    g.add(pool); g.add(rim);
+    g.userData.rim = rim;
+    return g;
+  }
+
   addReticle(color) {
     const r = this.makeReticle(color);
     this.scene.add(r);
@@ -476,14 +491,26 @@ export class ItemField {
 
   makeHazardRing(kind) {
     const color = kind === 'banana' ? 0xffd23d : 0xffe08a;
-    const g = new THREE.RingGeometry(0.72, 1.0, 26);
-    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({
+    const mat = new THREE.MeshBasicMaterial({
       color, transparent: true, opacity: 0.85, depthWrite: false,
       blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false
+    });
+    const g = new THREE.Group();
+    // A wide band, not a hairline. At three metres across and forty metres out
+    // a thin ring is about six pixels of nothing; this is the width of the
+    // thing you are being warned about.
+    const band = new THREE.Mesh(new THREE.RingGeometry(0.52, 1.0, 32), mat);
+    g.add(band);
+    // and a faint wash inside it so the ground itself reads as dangerous
+    const wash = new THREE.Mesh(new THREE.CircleGeometry(0.52, 28), new THREE.MeshBasicMaterial({
+      color, transparent: true, opacity: 0.22, depthWrite: false,
+      blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false
     }));
-    m.rotation.x = -Math.PI / 2;
-    m.renderOrder = 6;
-    return m;
+    g.add(wash);
+    g.userData.mats = [mat, wash.material];
+    g.rotation.x = -Math.PI / 2;
+    g.renderOrder = 6;
+    return g;
   }
 
   dropHazard(kind, t, lat, mesh, radius, life, owner = 'the road') {
@@ -536,24 +563,46 @@ export class ItemField {
       // the basis puts local XY upright, so a flat disc has to be laid down
       // again afterwards. Without this the ghee slick was a vertical plate
       // standing in the road, which is exactly as confusing as it sounds.
-      if (h.kind === 'slick') h.mesh.rotateX(-Math.PI / 2);
       if (h.kind === 'slick') {
+        // the basis puts local XY upright, so a flat pool has to be laid down
+        // again afterwards. Without this the ghee slick was a vertical plate
+        // standing in the road, which is exactly as confusing as it sounds.
+        h.mesh.rotateX(-Math.PI / 2);
         const grow = Math.min(1, h.age * 2.2);
-        h.mesh.scale.set(h.radius * grow, h.radius * grow * 0.55, 1);
-        h.mesh.material.opacity = 0.5 * (1 - Math.pow(h.age / h.life, 4));
+        const fade = 1 - Math.pow(h.age / h.life, 4);
+        h.mesh.scale.set(h.radius * grow, h.radius * grow * 0.62, 1);
+        const pool = h.mesh.children[0], rim = h.mesh.userData.rim;
+        if (pool) pool.material.opacity = 0.52 * fade;
+        if (rim) rim.material.opacity = 0.85 * fade;
       } else {
         h.mesh.rotation.y += dt * 0.6;
+        // the peel settles then sits still, rather than spinning forever like
+        // a pickup, which is what made it read as something to collect
+        if (h.age < 0.6) h.mesh.position.y += (1 - h.age / 0.6) * 0.4;
       }
 
       // the warning ring: sits flat, breathes, and fades out with the hazard
+      // The warning ring. It is drawn at the size of the actual hit box, so
+      // what you steer around is exactly what catches you, and it flashes
+      // harder the closer she is to it.
       if (h.ring) {
-        const rad = h.kind === 'slick' ? h.radius * Math.min(1, h.age * 2.2) : 3.4;
-        const pulse = 1 + Math.sin(h.age * 6.5) * 0.09;
-        tr.posAt(h.t, h.lat, 0.16, h.ring.position);
-        h.ring.quaternion.copy(h.mesh.quaternion);
+        const rad = h.kind === 'slick' ? h.radius * Math.min(1, h.age * 2.2) : 3.2;
+        const close = 1 - Math.min(1, Math.abs(gap) / 220);
+        const pulse = 1 + Math.sin(h.age * (5 + close * 9)) * (0.07 + close * 0.09);
+        // The road is crowned: its surface sits between 0.20 and 0.28 above the
+        // spline. The ring used to be drawn at 0.16, which is underneath the
+        // tarmac, so the warning marker was invisible the whole time.
+        tr.posAt(h.t, h.lat, 0.36, h.ring.position);
+        tr.tanAt(h.t, _v); tr.upAt(h.t, _v2);
+        _v3.crossVectors(_v2, _v).normalize();
+        _m.makeBasis(_v3, _v2, _v);
+        h.ring.quaternion.setFromRotationMatrix(_m);
         h.ring.rotateX(-Math.PI / 2);
-        h.ring.scale.setScalar(Math.max(2.6, rad) * pulse);
-        h.ring.material.opacity = 0.9 * (1 - Math.pow(h.age / h.life, 3));
+        h.ring.scale.setScalar(rad * pulse);
+        const op = (0.30 + close * 0.38) * (1 - Math.pow(h.age / h.life, 3));
+        const mats = h.ring.userData.mats || [];
+        if (mats[0]) mats[0].opacity = op;
+        if (mats[1]) mats[1].opacity = op * 0.26;
       }
 
       // who is standing in it

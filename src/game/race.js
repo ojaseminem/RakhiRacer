@@ -377,6 +377,17 @@ export class Race {
     if (!racing) { D.update(dt, P); return; }
 
     // ---- driving ----
+    // Tyre smoke whenever she is asking more of the tyres than they have. It
+    // is the only outward sign that the car is sliding rather than gripping,
+    // and without it the new handling is invisible.
+    if (P.slide > 0.12 && !P.airborne) {
+      this._smoke = (this._smoke || 0) - dt;
+      if (this._smoke <= 0) {
+        this._smoke = 0.045;
+        this.vfx.dust(P.group.position, 2 + Math.round(P.slide * 3), 0xdcd2e8, 2.2);
+      }
+    }
+
     P.update(dt, input, {
       onScrape: () => { D.addShake(0.10); audio.scrape(); },
       onLand: (v) => {

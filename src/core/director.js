@@ -119,12 +119,17 @@ export class Director {
 
     // look a little further down the road the faster she is going
     const ahead = p.t + this.lookAhead * (0.6 + speedK * 1.5);
-    track.posAt(Math.min(1, ahead), p.lat * 0.55, 2.4 + p.airY, _look);
+    const lead = THREE.MathUtils.clamp((p.heading || 0) * 22, -9, 9);
+    track.posAt(Math.min(1, ahead), p.lat * 0.55 + lead, 2.4 + p.airY, _look);
 
-    // the rig sits behind her along the track, not behind her nose, which keeps
-    // it stable through the drifts
+    // The rig sits behind her along the track rather than behind her nose,
+    // which keeps it stable through the drifts. It does swing a little wide of
+    // the corner she is turning into, though, because a camera that never
+    // reacts to steering is half of why turning felt like sliding.
     const back = p.t - (this.dist / track.length) * (1 + speedK * 0.22 + p.boostBlend * 0.18);
-    track.posAt(Math.max(0, back), p.lat * 0.72, 0, _p);
+    const swing = THREE.MathUtils.clamp((p.heading || 0) * 9, -5, 5);
+    this.swing = (this.swing || 0) + (swing - (this.swing || 0)) * Math.min(1, 3 * dt);
+    track.posAt(Math.max(0, back), p.lat * 0.72 - this.swing, 0, _p);
     track.upAt(Math.max(0, back), _q);
     _p.addScaledVector(_q, this.height + p.airY * 0.85 + p.boostBlend * 0.7);
 

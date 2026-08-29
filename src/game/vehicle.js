@@ -30,6 +30,9 @@ export class Vehicle {
     this.airborne = false;
 
     this.drift = 0;          // visual yaw, radians
+    this.heading = 0;        // where the nose points, relative to the road
+    this.slide = 0;          // how far past grip the tyres are
+    this.steerVis = 0;       // smoothed input, for the front wheels
     this.lean = 0;           // visual roll
     this.pitch = 0;
     this.bob = 0;
@@ -93,8 +96,19 @@ export class Vehicle {
     this.slipping = Math.max(this.slipping, dur);
     if (spin) {
       this.spinOut = Math.max(this.spinOut, 1.15);
-      this.spinDir = Math.random() > 0.5 ? 1 : -1;
-      this.speed *= 0.55;
+      // spin the way she was already leaning rather than at random, which is
+      // the difference between an accident and a coin flip
+      this.spinDir = this.latVel > 0.5 ? 1 : this.latVel < -0.5 ? -1
+        : (Math.random() > 0.5 ? 1 : -1);
+      this.speed *= 0.62;
+      // let go of the wheel for the duration; fighting a spin you cannot steer
+      // out of is just frustrating
+      this.heading = 0;
+      this.latVel *= 0.4;
+    } else {
+      // a slick does not spin her, it takes the grip away and lets the car
+      // wash wide, so she keeps some say in where it ends up
+      this.latVel += Math.sign(this.latVel || 1) * 4;
     }
     this.hits++;
     return true;
@@ -178,26 +192,47 @@ export class Vehicle {
     if (this.offroad < 0.1 && this.stunned <= 0) this.cleanTime += dt;
 
     // ---- lateral ----
+    //
+    // The car has a heading now: an angle away from the road's direction that
+    // the steering turns, and it travels along that heading. Before this, the
+    // steering set a sideways velocity directly, up to fifty metres a second,
+    // so the car slid across the road like a puck without ever pointing where
+    // it was going. That is what read as drifting around the centre of the
+    // road rather than driving.
     const speedK = Math.min(1, this.speed / (s.topSpeed * 0.55));
     let steer = input.steer;
 
-    // the assist: a gentle pull back toward the racing line, stronger the
-    // further out she is and the less she is steering. she never has to fight
-    // the road, only decide where on it to be.
+    // A light stabiliser, not a driver. It used to pull the car onto a racing
+    // line by itself, which is a third of why nothing felt like steering.
     if (this.assist > 0) {
       const curve = track.curveAt(this.t);
-      const ideal = THREE.MathUtils.clamp(-curve * 26, -half * 0.55, half * 0.55);
+      const ideal = THREE.MathUtils.clamp(-curve * 18, -half * 0.40, half * 0.40);
       const pull = (ideal - this.lat) / Math.max(1, half);
-      steer -= pull * 0.34 * this.assist * (1 - Math.abs(input.steerRaw) * 0.75);
+      steer -= pull * 0.11 * this.assist * (1 - Math.abs(input.steerRaw) * 0.9);
     }
 
-    const turn = s.turn * (1 - 0.28 * Math.min(1, this.speed / s.topSpeed));
+    // How far off the road's line the nose can point. It tightens with speed,
+    // which is what stops a flat out car turning like a shopping trolley.
+    const lockLimit = s.turn * 0.185 * (1 - 0.42 * Math.min(1, this.speed / s.topSpeed));
     // lat is measured to the left of the centre line, so a positive steer
-    // input (D, right) has to push it negative. This one sign was why steering
-    // felt inverted.
-    const desired = -steer * turn * 34 * speedK;
-    const grip = s.grip * (this.offroad ? 0.45 : 1) * (this.airborne ? 0.25 : 1) * (this.slipping > 0 ? 0.22 : 1);
-    this.latVel += (desired - this.latVel) * Math.min(1, grip * dt);
+    // input (D, right) has to point the nose the other way in this frame.
+    const headingWant = -steer * lockLimit * (0.35 + 0.65 * speedK);
+
+    const grip = s.grip * (this.offroad ? 0.45 : 1) * (this.airborne ? 0.22 : 1) * (this.slipping > 0 ? 0.20 : 1);
+    // the nose swings toward where you are pointing it, quickly but not
+    // instantly, which is the weight of a car
+    this.heading += (headingWant - this.heading) * Math.min(1, (2.2 + s.grip * 0.42) * dt);
+
+    // and the car goes where it is pointing. The tyres take a moment to catch
+    // up with the nose, and that lag is the slide.
+    const want = this.speed * Math.sin(this.heading);
+    this.latVel += (want - this.latVel) * Math.min(1, grip * 0.9 * dt);
+
+    // understeer: past a certain cornering load the tyres stop keeping up and
+    // she washes wide, which is a reason to lift off rather than a punishment
+    const load = Math.abs(this.latVel) / Math.max(8, this.speed * 0.34);
+    this.slide = Math.max(0, load - 1);
+    if (this.slide > 0) this.latVel -= Math.sign(this.latVel) * this.slide * 6 * dt;
 
     // banking pushes you downhill on a cambered corner, which is free feel
     this.latVel += track.bankAt(this.t) * 26 * speedK * dt;
@@ -210,7 +245,13 @@ export class Vehicle {
     if (Math.abs(this.lat) > wall) {
       this.lat = Math.sign(this.lat) * wall;
       this.latVel *= -0.18;
-      this.speed *= 0.985;
+      // scrubbing sixty per cent of your speed for a second against the wall
+      // was a race ending mistake for a moment of clumsiness. It costs about a
+      // fifth now, which stings without ruining the run.
+      this.speed *= 0.997;
+      // and stop pointing into the wall, so she is not fighting a heading she
+      // cannot use
+      this.heading *= 0.86;
       this.scraping = 0.2;
       if (ctx.onScrape) ctx.onScrape(this);
     } else if (this.scraping > 0) {
@@ -235,10 +276,21 @@ export class Vehicle {
 
     // ---- visual state ----
     if (this.spinOut > 0) {
+      // a whole number of turns, then unwind to straight, so the car never
+      // finishes a spin sitting sideways on the road
       this.drift += dt * 11 * (this.spinDir || 1);
+      if (this.spinOut < 0.35) {
+        const near = Math.round(this.drift / (Math.PI * 2)) * Math.PI * 2;
+        this.drift += (near - this.drift) * Math.min(1, 7 * dt);
+      }
     } else {
-      const driftTarget = THREE.MathUtils.clamp(-this.latVel / 26, -0.75, 0.75);
-      this.drift += (driftTarget - this.drift) * Math.min(1, 8 * dt);
+      // Point the car along its own velocity, plus a little extra into the
+      // corner when it is sliding. The old version took the sideways velocity
+      // and yawed the opposite way, so the car permanently counter-steered
+      // away from wherever it was actually travelling.
+      const slip = Math.atan2(this.latVel, Math.max(10, this.speed));
+      const driftTarget = THREE.MathUtils.clamp(slip * (1 + this.slide * 0.9), -0.85, 0.85);
+      this.drift += (driftTarget - this.drift) * Math.min(1, 11 * dt);
       if (Math.abs(this.drift) > Math.PI) this.drift -= Math.sign(this.drift) * Math.PI * 2;
     }
     const leanTarget = s.ride === 'bike'
@@ -248,6 +300,7 @@ export class Vehicle {
     const pitchTarget = THREE.MathUtils.clamp((this.throttleBlend - 0.5) * -0.16, -0.14, 0.14)
       + (this.airborne ? -0.10 : 0);
     this.pitch += (pitchTarget - this.pitch) * Math.min(1, 5 * dt);
+    this.steerVis += ((input.steer || 0) - this.steerVis) * Math.min(1, 12 * dt);
     this.bob += dt * (4 + this.speed * 0.06);
 
     this.wheelSpin += this.speed * dt * 1.6;
@@ -269,7 +322,7 @@ export class Vehicle {
     g.quaternion.setFromRotationMatrix(_m);
 
     // drift, lean and pitch are all local to the vehicle, applied in that order
-    _e.set(this.pitch, this.drift * 0.55, -this.lean, 'YXZ');
+    _e.set(this.pitch, this.drift, -this.lean, 'YXZ');
     _q.setFromEuler(_e);
     g.quaternion.multiply(_q);
 
@@ -278,8 +331,10 @@ export class Vehicle {
     for (let i = 0; i < ws.length; i++) {
       const w = ws[i];
       w.rotation.x = -this.wheelSpin / (w.userData.radius || 0.5);
-      if (i < 2 && this.spec.ride !== 'bike') w.rotation.y = this.drift * 0.55;
-      if (this.spec.ride === 'bike' && i === 0) w.rotation.y = this.drift * 0.4;
+      // the front wheels follow the steering input rather than the slide, so
+      // they turn the instant she presses a key
+      if (i < 2 && this.spec.ride !== 'bike') w.rotation.y = this.steerVis * 0.5;
+      if (this.spec.ride === 'bike' && i === 0) w.rotation.y = this.steerVis * 0.42;
     }
   }
 

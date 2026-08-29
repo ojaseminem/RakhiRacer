@@ -139,7 +139,7 @@ export const VEHICLES = [
     body: 0xe8203f, accent: 0xfff0d0, glow: 0xff6a4a, trail: 0xff9e3d,
     stats: [['SPEED', 5], ['ACCELERATION', 5], ['WEIGHT', 2], ['HANDLING', 1]],
     // physics
-    topSpeed: 123, accel: 64, brake: 45, grip: 5.6, turn: 1.55, mass: 0.8,
+    topSpeed: 123, accel: 70, brake: 45, grip: 5.6, turn: 1.55, mass: 0.8,
     boostMul: 1.62, boostTime: 2.4, boostDrain: 34, boostRegen: 12,
     ability: {
       name: 'NITRO BURST',
@@ -157,7 +157,7 @@ export const VEHICLES = [
     blurb: 'Massive. Chunky. Comically oversized. It does not avoid things, it removes them.',
     body: 0xffb01f, accent: 0x2bb8a8, glow: 0xffd84a, trail: 0xffc93d,
     stats: [['ATTACK', 5], ['DEFENSE', 4], ['WEIGHT', 5], ['SPEED', 3]],
-    topSpeed: 104, accel: 45, brake: 40, grip: 7.4, turn: 1.15, mass: 2.4,
+    topSpeed: 104, accel: 50, brake: 40, grip: 7.4, turn: 1.15, mass: 2.4,
     boostMul: 1.44, boostTime: 2.8, boostDrain: 28, boostRegen: 14,
     ability: {
       name: 'FAMILY FURY',
@@ -175,7 +175,7 @@ export const VEHICLES = [
     blurb: 'One rider. Glowing wheels. Long body, neon trails, and it floats a little off the road.',
     body: 0x18c8ff, accent: 0xfff2ff, glow: 0x6affff, trail: 0x39e6ff,
     stats: [['HANDLING', 5], ['SPEED', 4], ['BOOST', 4], ['WEIGHT', 2]],
-    topSpeed: 115, accel: 59, brake: 43, grip: 9.2, turn: 2.05, mass: 0.7,
+    topSpeed: 115, accel: 65, brake: 43, grip: 9.2, turn: 2.05, mass: 0.7,
     boostMul: 1.55, boostTime: 3.2, boostDrain: 26, boostRegen: 16,
     ability: {
       name: 'PHASE DASH',
